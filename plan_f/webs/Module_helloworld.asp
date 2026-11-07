@@ -216,13 +216,14 @@ function confdecode(obj) {
 }
 function conf2obj(obj, p) {
 	var c = obj["json"] ? JSON.parse(obj["json"]) : "";
-	var type = c.v2ray_protocol;
+	var type = c.v2ray_protocol || c.type;
 	E(p + "mode").value = obj["mode"];
 	E(p + "server").value = c.server || "";
 	E(p + "port").value = c.server_port || "";
 	E(p + "password").value = c.password || "";
-	E(p + "v2_protocol").value = c.v2ray_protocol;
+	E(p + "v2_protocol").value = c.v2ray_protocol || type;
 	E(p + "alias").value = c.alias || "";
+	if(E(p + "username")) E(p + "username").value = c.username || "";
 	if(type == "shadowsocks"){
 		E(p + "type").value = "0";
 		E(p + "method_ss").value = c.encrypt_method_ss || "none";
@@ -338,6 +339,32 @@ function conf2obj(obj, p) {
 		E(p + "fast_open").checked =  E(p + "fast_open").value != 0;	//helloworld-full
 		E(p + "uplink_capacity").value = c.uplink_capacity || "5";	//helloworld-full
 		E(p + "downlink_capacity").value = c.downlink_capacity || "20";	//helloworld-full
+	}else if(type == "tuic"){	//helloworld-full
+		E(p + "type").value = "5";	//helloworld-full
+		if(E(p + "tuic_uuid")) E(p + "tuic_uuid").value = c.tuic_uuid || c.vmess_id || "";	//helloworld-full
+		if(E(p + "tuic_passwd")) E(p + "tuic_passwd").value = c.tuic_passwd || c.password || "";	//helloworld-full
+		if(E(p + "congestion_control")) E(p + "congestion_control").value = c.congestion_control || "bbr";	//helloworld-full
+		if(E(p + "udp_relay_mode")) E(p + "udp_relay_mode").value = c.udp_relay_mode || "native";	//helloworld-full
+		if(E(p + "tls_alpn")) E(p + "tls_alpn").value = (typeof(c.tls_alpn) == "object" ? c.tls_alpn[0] : c.tls_alpn) || "h3";	//helloworld-full
+		E(p + "tls_host").value = c.tls_host || "";	//helloworld-full
+		E(p + "insecure").value = c.insecure || "0";	//helloworld-full
+		E(p + "insecure").checked =  E(p + "insecure").value != 0;	//helloworld-full
+		if(E(p + "disable_sni")){	//helloworld-full
+			E(p + "disable_sni").value = c.disable_sni || "0";	//helloworld-full
+			E(p + "disable_sni").checked =  E(p + "disable_sni").value != 0;	//helloworld-full
+		}	//helloworld-full
+	}else if(type == "socks" || type == "http"){
+		E(p + "type").value = "2";
+		E(p + "v2_protocol").value = type;
+		if(E(p + "username")) E(p + "username").value = c.username || "";
+		E(p + "password").value = c.password || "";
+		if(type == "http"){
+			E(p + "v2_tls").value = c.tls || "0";
+			E(p + "v2_tls").checked =  E(p + "v2_tls").value != 0;
+			E(p + "tls_host").value = c.tls_host || "";
+			E(p + "insecure").value = c.insecure || "0";
+			E(p + "insecure").checked =  E(p + "insecure").value != 0;
+		}
 	}
 }
 function ssconf_node2obj(node_sel) {
@@ -406,6 +433,21 @@ function refresh_options() {
 				value: field,
 				text: "【Hysteria】" + j.alias
 			}));
+		}else if(j.v2ray_protocol == "tuic"){	//helloworld-full
+			option.append($("<option>", {	//helloworld-full
+				value: field,	//helloworld-full
+				text: "【TUIC】" + j.alias	//helloworld-full
+			}));	//helloworld-full
+		}else if(j.v2ray_protocol == "socks"){
+			option.append($("<option>", {
+				value: field,
+				text: "【SOCKS5】" + j.alias
+			}));
+		}else if(j.v2ray_protocol == "http"){
+			option.append($("<option>", {
+				value: field,
+				text: "【HTTP】" + j.alias
+			}));
 		}
 	}
 	if(typeof(db_ss["ssconf_basic_node"]) != "undefined" && parseInt(db_ss["ssconf_basic_node"]) <= node_max)
@@ -419,12 +461,14 @@ function refresh_options() {
 		option3.val("0");
 	else if(j == "shadowsocksr")
 		option3.val("1");
-	else if(j == "vmess" || j == "vless")
+	else if(j == "vmess" || j == "vless" || j == "socks" || j == "http")
 		option3.val("2");
 	else if(j == "trojan")
 		option3.val("3");
 	else if(j == "hysteria")
 		option3.val("4");
+	else if(j == "tuic")	//helloworld-full
+		option3.val("5");	//helloworld-full
 }
 function save() {
 	var tmp_db = {}
@@ -493,73 +537,85 @@ function save() {
 		tmp_db.obfs = E("sstable_obfs").value;
 		tmp_db.obfs_param = E("sstable_obfs_param").value;
 	}else if(node_type == 2){
-		tmp_db.transport = E("sstable_v2_transport").value;
-		tmp_db.vmess_id = E("sstable_v2_vmess_id").value;
-		if(tmp_db.v2ray_protocol == "vmess"){
-			tmp_db.alter_id = E("sstable_v2_alter_id").value;
-			tmp_db.security = E("sstable_v2_security").value;
-		}
-		if(tmp_db.v2ray_protocol == "vless"){
-			tmp_db.vless_encryption = E("sstable_v2_encryption").value;
-			tmp_db.reality = E("sstable_v2_reality").checked ? '1' : '0';
-			tmp_db.tls_flow = E("sstable_v2_tls_flow").value;
-			if(E("sstable_v2_reality").checked == true){
-					tmp_db.reality_publickey = E("sstable_v2_reality_publickey").value;
-					tmp_db.reality_shortid = E("sstable_v2_reality_shortid").value;
-					tmp_db.reality_spiderx = E("sstable_v2_reality_spiderx").value;
+		if(tmp_db.v2ray_protocol == "socks" || tmp_db.v2ray_protocol == "http"){
+			if(E("sstable_username")) tmp_db.username = E("sstable_username").value;
+			tmp_db.password = E("sstable_password").value;
+			if(tmp_db.v2ray_protocol == "http"){
+				tmp_db.tls = E("sstable_v2_tls").checked ? '1' : '0';
+				if(E("sstable_v2_tls").checked){
+					tmp_db.tls_host = E("sstable_tls_host").value;
+					tmp_db.insecure = E("sstable_insecure").checked ? '1' : '0';
+				}
 			}
-		}
-		tmp_db.tls = E("sstable_v2_tls").checked ? '1' : '0';
-		if(E("sstable_v2_reality").checked == false){
-			tmp_db.mux = E("sstable_v2_mux").checked ? '1' : '0';
-			tmp_db.concurrency = E("sstable_v2_concurrency").value;
-		}
-		if(E("sstable_v2_tls").checked || E("sstable_v2_reality").checked){
-			tmp_db.tls_host = E("sstable_tls_host").value;
-			tmp_db.fingerprint = E("sstable_v2_fingerprint").value;
-		}
-		tmp_db.insecure = E("sstable_insecure").checked ? '1' : '0';
-		if (tmp_db.transport == "tcp") {
-			tmp_db.tcp_guise = E("sstable_v2_tcp_guise").value;
-			if(tmp_db.tcp_guise == "http"){
-				tmp_db.http_host = E("sstable_v2_http_host").value;
-				tmp_db.http_path = E("sstable_v2_http_path").value;
+		}else{
+			tmp_db.transport = E("sstable_v2_transport").value;
+			tmp_db.vmess_id = E("sstable_v2_vmess_id").value;
+			if(tmp_db.v2ray_protocol == "vmess"){
+				tmp_db.alter_id = E("sstable_v2_alter_id").value;
+				tmp_db.security = E("sstable_v2_security").value;
 			}
-		} else if (tmp_db.transport == "kcp") {
-			tmp_db.kcp_guise = E("sstable_v2_kcp_guise").value;
-			tmp_db.mtu = E("sstable_v2_mtu").value;
-			tmp_db.tti = E("sstable_v2_tti").value;
-			tmp_db.uplink_capacity = E("sstable_uplink_capacity").value;
-			tmp_db.downlink_capacity = E("sstable_downlink_capacity").value;
-			tmp_db.read_buffer_size = E("sstable_v2_read_buffer_size").value;
-			tmp_db.write_buffer_size = E("sstable_v2_write_buffer_size").value;
-			tmp_db.seed = E("sstable_v2_seed").value;
-			tmp_db.congestion = E("sstable_v2_congestion").checked ? '1' : '0';
-		} else if (tmp_db.transport == "ws") {
-			tmp_db.ws_host = E("sstable_v2_http_host").value;
-			tmp_db.ws_path = E("sstable_v2_http_path").value;
-		} else if (tmp_db.transport == "h2") {
-			tmp_db.h2_host = E("sstable_v2_http_host").value;
-			tmp_db.h2_path = E("sstable_v2_http_path").value;
-			tmp_db.health_check = E("sstable_v2_health_check").checked ? '1' : '0';
-			if(E("sstable_v2_health_check").checked){
-				tmp_db.read_idle_timeout = E("sstable_v2_idle_timeout").value;
-				tmp_db.health_check_timeout = E("sstable_v2_health_check_timeout").value;
+			if(tmp_db.v2ray_protocol == "vless"){
+				tmp_db.vless_encryption = E("sstable_v2_encryption").value;
+				tmp_db.reality = E("sstable_v2_reality").checked ? '1' : '0';
+				tmp_db.tls_flow = E("sstable_v2_tls_flow").value;
+				if(E("sstable_v2_reality").checked == true){
+						tmp_db.reality_publickey = E("sstable_v2_reality_publickey").value;
+						tmp_db.reality_shortid = E("sstable_v2_reality_shortid").value;
+						tmp_db.reality_spiderx = E("sstable_v2_reality_spiderx").value;
+				}
 			}
-		} else if (tmp_db.transport == "quic") {
-			tmp_db.quic_guise = E("sstable_v2_quic_guise").value;
-			tmp_db.quic_key = E("sstable_v2_quic_key").value;
-			tmp_db.quic_security = E("sstable_v2_quic_security").value;
-		} else if (tmp_db.transport == "grpc") {
-			tmp_db.serviceName = E("sstable_v2_serviceName").value;
-			tmp_db.grpc_mode = E("sstable_v2_grpc_mode").value;
-			tmp_db.initial_windows_size = E("sstable_v2_initial_windows_size").value;
-			tmp_db.health_check = E("sstable_v2_health_check").checked ? '1' : '0';
-			if(E("sstable_v2_health_check").checked){
-				tmp_db.idle_timeout = E("sstable_v2_idle_timeout").value;
-				tmp_db.health_check_timeout = E("sstable_v2_health_check_timeout").value;
-				tmp_db.permit_without_stream = E("sstable_v2_permit_without_stream").value;
-			}			
+			tmp_db.tls = E("sstable_v2_tls").checked ? '1' : '0';
+			if(E("sstable_v2_reality").checked == false){
+				tmp_db.mux = E("sstable_v2_mux").checked ? '1' : '0';
+				tmp_db.concurrency = E("sstable_v2_concurrency").value;
+			}
+			if(E("sstable_v2_tls").checked || E("sstable_v2_reality").checked){
+				tmp_db.tls_host = E("sstable_tls_host").value;
+				tmp_db.fingerprint = E("sstable_v2_fingerprint").value;
+			}
+			tmp_db.insecure = E("sstable_insecure").checked ? '1' : '0';
+			if (tmp_db.transport == "tcp") {
+				tmp_db.tcp_guise = E("sstable_v2_tcp_guise").value;
+				if(tmp_db.tcp_guise == "http"){
+					tmp_db.http_host = E("sstable_v2_http_host").value;
+					tmp_db.http_path = E("sstable_v2_http_path").value;
+				}
+			} else if (tmp_db.transport == "kcp") {
+				tmp_db.kcp_guise = E("sstable_v2_kcp_guise").value;
+				tmp_db.mtu = E("sstable_v2_mtu").value;
+				tmp_db.tti = E("sstable_v2_tti").value;
+				tmp_db.uplink_capacity = E("sstable_uplink_capacity").value;
+				tmp_db.downlink_capacity = E("sstable_downlink_capacity").value;
+				tmp_db.read_buffer_size = E("sstable_v2_read_buffer_size").value;
+				tmp_db.write_buffer_size = E("sstable_v2_write_buffer_size").value;
+				tmp_db.seed = E("sstable_v2_seed").value;
+				tmp_db.congestion = E("sstable_v2_congestion").checked ? '1' : '0';
+			} else if (tmp_db.transport == "ws") {
+				tmp_db.ws_host = E("sstable_v2_http_host").value;
+				tmp_db.ws_path = E("sstable_v2_http_path").value;
+			} else if (tmp_db.transport == "h2") {
+				tmp_db.h2_host = E("sstable_v2_http_host").value;
+				tmp_db.h2_path = E("sstable_v2_http_path").value;
+				tmp_db.health_check = E("sstable_v2_health_check").checked ? '1' : '0';
+				if(E("sstable_v2_health_check").checked){
+					tmp_db.read_idle_timeout = E("sstable_v2_idle_timeout").value;
+					tmp_db.health_check_timeout = E("sstable_v2_health_check_timeout").value;
+				}
+			} else if (tmp_db.transport == "quic") {
+				tmp_db.quic_guise = E("sstable_v2_quic_guise").value;
+				tmp_db.quic_key = E("sstable_v2_quic_key").value;
+				tmp_db.quic_security = E("sstable_v2_quic_security").value;
+			} else if (tmp_db.transport == "grpc") {
+				tmp_db.serviceName = E("sstable_v2_serviceName").value;
+				tmp_db.grpc_mode = E("sstable_v2_grpc_mode").value;
+				tmp_db.initial_windows_size = E("sstable_v2_initial_windows_size").value;
+				tmp_db.health_check = E("sstable_v2_health_check").checked ? '1' : '0';
+				if(E("sstable_v2_health_check").checked){
+					tmp_db.idle_timeout = E("sstable_v2_idle_timeout").value;
+					tmp_db.health_check_timeout = E("sstable_v2_health_check_timeout").value;
+					tmp_db.permit_without_stream = E("sstable_v2_permit_without_stream").value;
+				}			
+			}
 		}
 	}else if(node_type == 3){
 		tmp_db.password = E("sstable_password").value;
@@ -582,6 +638,19 @@ function save() {
 			tmp_db.salamander = E("sstable_salamander").value;	//helloworld-full
 		tmp_db.uplink_capacity = E("sstable_uplink_capacity").value;	//helloworld-full
 		tmp_db.downlink_capacity = E("sstable_downlink_capacity").value;	//helloworld-full
+	}else if(node_type == 5){	//helloworld-full
+		tmp_db.v2ray_protocol = "tuic";	//helloworld-full
+		tmp_db.type = "tuic";	//helloworld-full
+		if(E("sstable_tuic_uuid")) tmp_db.tuic_uuid = E("sstable_tuic_uuid").value;	//helloworld-full
+		tmp_db.vmess_id = tmp_db.tuic_uuid;	//helloworld-full
+		if(E("sstable_tuic_passwd")) tmp_db.tuic_passwd = E("sstable_tuic_passwd").value;	//helloworld-full
+		tmp_db.password = tmp_db.tuic_passwd;	//helloworld-full
+		if(E("sstable_congestion_control")) tmp_db.congestion_control = E("sstable_congestion_control").value;	//helloworld-full
+		if(E("sstable_udp_relay_mode")) tmp_db.udp_relay_mode = E("sstable_udp_relay_mode").value;	//helloworld-full
+		if(E("sstable_tls_alpn")) tmp_db.tls_alpn = E("sstable_tls_alpn").value;	//helloworld-full
+		tmp_db.tls_host = E("sstable_tls_host").value;	//helloworld-full
+		tmp_db.insecure = E("sstable_insecure").checked ? '1' : '0';	//helloworld-full
+		if(E("sstable_disable_sni")) tmp_db.disable_sni = E("sstable_disable_sni").checked ? '1' : '0';	//helloworld-full
 	}
 	dbus["ssconf_basic_json_" + node_sel] = tmp_db;
 	dbus["ssconf_basic_mode_" + node_sel] = E("sstable_mode").value;
@@ -699,18 +768,21 @@ function verifyFields(r) {
 	var trojan_on = false;
 	var v2ray_on = false;
 	var hysteria_on = false;
+	var tuic_on = false;	//helloworld-full
 	if(db_ss["ssconf_basic_json_" + node_sel])	//helloworld-full
 		node = JSON.parse(db_ss["ssconf_basic_json_" + node_sel]);	//helloworld-full
 	if(E("sstable_v2_protocol").value == "shadowsocks"){
 		ss_on = true;
 	}else if(E("sstable_v2_protocol").value == "shadowsocksr"){
 		ssr_on = true;
-	}else if(E("sstable_v2_protocol").value == "vmess" || E("sstable_v2_protocol").value == "vless"){
+	}else if(E("sstable_v2_protocol").value == "vmess" || E("sstable_v2_protocol").value == "vless" || E("sstable_v2_protocol").value == "socks" || E("sstable_v2_protocol").value == "http"){
 		v2ray_on = true;
 	}else if(E("sstable_v2_protocol").value == "trojan"){
 		trojan_on = true;
-	}else if(node && node.type == "hysteria"){	//helloworld-full
+	}else if(node && (node.type == "hysteria" || node.v2ray_protocol == "hysteria")){	//helloworld-full
 		hysteria_on = true;	//helloworld-full
+	}else if(node && (node.type == "tuic" || node.v2ray_protocol == "tuic")){	//helloworld-full
+		tuic_on = true;	//helloworld-full
 	}
 	//ss
 	elem.display(elem.parentElem('sstable_plugin', 'tr'), ss_on);
@@ -732,55 +804,64 @@ function verifyFields(r) {
 	var vless_on =  E("sstable_v2_protocol").value == "vless";
 	var socks_on =  E("sstable_v2_protocol").value == "socks";
 	var http_on =  E("sstable_v2_protocol").value == "http";
-	elem.display(elem.parentElem('sstable_v2_vmess_id', 'tr'), (v2ray_on && (vmess_on || vless_on)));
-	elem.display(elem.parentElem('sstable_v2_alter_id', 'tr'), (v2ray_on && vmess_on));
-	elem.display(elem.parentElem('sstable_insecure', 'tr'), ((v2ray_on && (vmess_on || vless_on)) || hysteria_on));
+	var socks_or_http = socks_on || http_on;
+	elem.display(elem.parentElem('sstable_v2_vmess_id', 'tr'), (v2ray_on && !socks_or_http && (vmess_on || vless_on)));
+	elem.display(elem.parentElem('sstable_v2_alter_id', 'tr'), (v2ray_on && !socks_or_http && vmess_on));
+	elem.display(elem.parentElem('sstable_insecure', 'tr'), ((v2ray_on && (vmess_on || vless_on || http_on)) || hysteria_on || tuic_on));
 	elem.display(elem.parentElem('sstable_v2_protocol', 'tr'), v2ray_on);
-	elem.display(elem.parentElem('sstable_v2_security', 'tr'), (v2ray_on && vmess_on));
-	elem.display(elem.parentElem('sstable_v2_transport', 'tr'), v2ray_on);
-	elem.display(elem.parentElem('sstable_v2_tcp_guise', 'tr'), tcp_on);
-	elem.display(elem.parentElem('sstable_v2_kcp_guise', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_http_host', 'tr'), (v2ray_on &&(ws_on || h2_on || thttp_on)));
-	elem.display(elem.parentElem('sstable_v2_http_path', 'tr'), (v2ray_on &&(ws_on || h2_on || thttp_on)));
-	elem.display(elem.parentElem('sstable_v2_quic_security', 'tr'), quic_on);
-	elem.display(elem.parentElem('sstable_v2_mtu', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_tti', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_uplink_capacity', 'tr'), kcp_on || hysteria_on);
-	elem.display(elem.parentElem('sstable_downlink_capacity', 'tr'), kcp_on || hysteria_on);
-	elem.display(elem.parentElem('sstable_v2_read_buffer_size', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_write_buffer_size', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_seed', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_congestion', 'tr'), kcp_on);
-	elem.display(elem.parentElem('sstable_v2_quic_key', 'tr'), quic_on);
-	elem.display(elem.parentElem('sstable_v2_quic_guise', 'tr'), quic_on);
-	elem.display(elem.parentElem('sstable_v2_serviceName', 'tr'), grpc_on);
-	elem.display(elem.parentElem('sstable_v2_grpc_mode', 'tr'), grpc_on);
-	elem.display(elem.parentElem('sstable_v2_encryption', 'tr'), (v2ray_on && vless_on));
-	elem.display(elem.parentElem('sstable_v2_idle_timeout', 'tr'), (grpc_on || h2_on));
-	elem.display(elem.parentElem('sstable_v2_permit_without_stream', 'tr'), grpc_on);
-	elem.display(elem.parentElem('sstable_v2_health_check_timeout', 'tr'), (grpc_on || h2_on));
-	elem.display(elem.parentElem('sstable_v2_initial_windows_size', 'tr'), grpc_on);
-	elem.display(elem.parentElem('sstable_v2_tls', 'tr'), ((v2ray_on || ss_on || trojan_on) && E("sstable_v2_reality").checked != true));
-	elem.display(elem.parentElem('sstable_v2_reality', 'tr'), (vless_on && E("sstable_v2_tls").checked != true));
-	elem.display(elem.parentElem('sstable_tls_host', 'tr'), (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked || hysteria_on));
-	elem.display(elem.parentElem('sstable_v2_fingerprint', 'tr'), (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked));
-	elem.display(elem.parentElem('sstable_v2_tls_flow', 'tr'), (vless_on && E("sstable_v2_transport").value == "tcp" && (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked)));
-	elem.display(elem.parentElem('sstable_v2_reality_publickey', 'tr'), (vless_on && E("sstable_v2_reality").checked));
-	elem.display(elem.parentElem('sstable_v2_reality_shortid', 'tr'), (vless_on && E("sstable_v2_reality").checked));
-	elem.display(elem.parentElem('sstable_v2_reality_spiderx', 'tr'), (vless_on && E("sstable_v2_reality").checked));
+	elem.display(elem.parentElem('sstable_v2_security', 'tr'), (v2ray_on && !socks_or_http && vmess_on));
+	elem.display(elem.parentElem('sstable_v2_transport', 'tr'), (v2ray_on && !socks_or_http));
+	elem.display(elem.parentElem('sstable_v2_tcp_guise', 'tr'), (!socks_or_http && tcp_on));
+	elem.display(elem.parentElem('sstable_v2_kcp_guise', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_http_host', 'tr'), (!socks_or_http && v2ray_on && (ws_on || h2_on || thttp_on)));
+	elem.display(elem.parentElem('sstable_v2_http_path', 'tr'), (!socks_or_http && v2ray_on && (ws_on || h2_on || thttp_on)));
+	elem.display(elem.parentElem('sstable_v2_quic_security', 'tr'), (!socks_or_http && quic_on));
+	elem.display(elem.parentElem('sstable_v2_mtu', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_tti', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_uplink_capacity', 'tr'), (!socks_or_http && kcp_on) || hysteria_on);
+	elem.display(elem.parentElem('sstable_downlink_capacity', 'tr'), (!socks_or_http && kcp_on) || hysteria_on);
+	elem.display(elem.parentElem('sstable_v2_read_buffer_size', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_write_buffer_size', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_seed', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_congestion', 'tr'), (!socks_or_http && kcp_on));
+	elem.display(elem.parentElem('sstable_v2_quic_key', 'tr'), (!socks_or_http && quic_on));
+	elem.display(elem.parentElem('sstable_v2_quic_guise', 'tr'), (!socks_or_http && quic_on));
+	elem.display(elem.parentElem('sstable_v2_serviceName', 'tr'), (!socks_or_http && grpc_on));
+	elem.display(elem.parentElem('sstable_v2_grpc_mode', 'tr'), (!socks_or_http && grpc_on));
+	elem.display(elem.parentElem('sstable_v2_encryption', 'tr'), (v2ray_on && !socks_or_http && vless_on));
+	elem.display(elem.parentElem('sstable_v2_idle_timeout', 'tr'), (!socks_or_http && (grpc_on || h2_on)));
+	elem.display(elem.parentElem('sstable_v2_permit_without_stream', 'tr'), (!socks_or_http && grpc_on));
+	elem.display(elem.parentElem('sstable_v2_health_check_timeout', 'tr'), (!socks_or_http && (grpc_on || h2_on)));
+	elem.display(elem.parentElem('sstable_v2_initial_windows_size', 'tr'), (!socks_or_http && grpc_on));
+	elem.display(elem.parentElem('sstable_v2_tls', 'tr'), (((v2ray_on && !socks_on) || ss_on || trojan_on) && E("sstable_v2_reality").checked != true));
+	elem.display(elem.parentElem('sstable_v2_reality', 'tr'), (vless_on && !socks_or_http && E("sstable_v2_tls").checked != true));
+	elem.display(elem.parentElem('sstable_tls_host', 'tr'), (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked || hysteria_on || tuic_on));
+	elem.display(elem.parentElem('sstable_v2_fingerprint', 'tr'), ((v2ray_on && !socks_or_http) && (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked)));
+	elem.display(elem.parentElem('sstable_v2_tls_flow', 'tr'), (vless_on && !socks_or_http && E("sstable_v2_transport").value == "tcp" && (E("sstable_v2_tls").checked || E("sstable_v2_reality").checked)));
+	elem.display(elem.parentElem('sstable_v2_reality_publickey', 'tr'), (vless_on && !socks_or_http && E("sstable_v2_reality").checked));
+	elem.display(elem.parentElem('sstable_v2_reality_shortid', 'tr'), (vless_on && !socks_or_http && E("sstable_v2_reality").checked));
+	elem.display(elem.parentElem('sstable_v2_reality_spiderx', 'tr'), (vless_on && !socks_or_http && E("sstable_v2_reality").checked));
 	elem.display(elem.parentElem('sstable_v2_ivCheck', 'tr'), ss_on);
-	elem.display(elem.parentElem('sstable_v2_mux', 'tr'), ((v2ray_on || ss_on || trojan_on) && E("sstable_v2_reality").checked == false));
-	elem.display(elem.parentElem('sstable_v2_concurrency', 'tr'), E("sstable_v2_mux").checked);
+	elem.display(elem.parentElem('sstable_v2_mux', 'tr'), ((v2ray_on && !socks_or_http || ss_on || trojan_on) && E("sstable_v2_reality").checked == false));
+	elem.display(elem.parentElem('sstable_v2_concurrency', 'tr'), (!socks_or_http && E("sstable_v2_mux").checked));
 	elem.display(elem.parentElem('sstable_tls_sessionTicket', 'tr'), (trojan_on && E("sstable_v2_tls").checked));
 	//hysteria
 	elem.display(elem.parentElem('sstable_hy2_auth', 'tr'), hysteria_on);	//helloworld-full
 	elem.display(elem.parentElem('sstable_flag_obfs', 'tr'), hysteria_on);	//helloworld-full
 	elem.display(elem.parentElem('sstable_salamander', 'tr'), (hysteria_on && E("sstable_flag_obfs").value == "1"));	//helloworld-full
 	elem.display(elem.parentElem('sstable_fast_open', 'tr'), hysteria_on);	//helloworld-full
+	//tuic
+	elem.display(elem.parentElem('sstable_tuic_uuid', 'tr'), tuic_on);	//helloworld-full
+	elem.display(elem.parentElem('sstable_tuic_passwd', 'tr'), tuic_on);	//helloworld-full
+	elem.display(elem.parentElem('sstable_congestion_control', 'tr'), tuic_on);	//helloworld-full
+	elem.display(elem.parentElem('sstable_udp_relay_mode', 'tr'), tuic_on);	//helloworld-full
+	elem.display(elem.parentElem('sstable_tls_alpn', 'tr'), tuic_on);	//helloworld-full
+	elem.display(elem.parentElem('sstable_disable_sni', 'tr'), tuic_on);	//helloworld-full
 
 	elem.display(elem.parentElem('sstable_server', 'tr'), true);
 	elem.display(elem.parentElem('sstable_port', 'tr'), true);
-	elem.display(elem.parentElem('sstable_password', 'tr'), (ss_on || ssr_on || trojan_on));
+	elem.display(elem.parentElem('sstable_username', 'tr'), socks_or_http);
+	elem.display(elem.parentElem('sstable_password', 'tr'), (ss_on || ssr_on || trojan_on || socks_or_http));
 	elem.display(elem.parentElem('sstable_method_ss', 'tr'), ss_on);
 	elem.display(elem.parentElem('sstable_method', 'tr'), ssr_on);
 
@@ -860,6 +941,26 @@ function verifyFields(r) {
 		showhide("ss_node_table_v2_reality_publickey_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
 		showhide("ss_node_table_v2_reality_shortid_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
 		showhide("ss_node_table_v2_reality_spiderx_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
+		var is_socks_2 = E("ss_node_table_v2_protocol").value == "socks";
+		var is_http_2 = E("ss_node_table_v2_protocol").value == "http";
+		var is_socks_or_http_2 = is_socks_2 || is_http_2;
+		showhide("ss_node_table_username_tr", is_socks_or_http_2);
+		showhide("ss_node_table_password_tr", is_socks_or_http_2);
+		if(is_socks_or_http_2){
+			showhide("ss_node_table_v2_vmess_id_tr", false);
+			showhide("ss_node_table_v2_alter_id_tr", false);
+			showhide("ss_node_table_v2_security_tr", false);
+			showhide("ss_node_table_v2_transport_tr", false);
+			showhide("ss_node_table_v2_tcp_guise_tr", false);
+			showhide("ss_node_table_v2_kcp_guise_tr", false);
+			showhide("ss_node_table_v2_http_host_tr", false);
+			showhide("ss_node_table_v2_http_path_tr", false);
+			showhide("ss_node_table_v2_mux_tr", false);
+			showhide("ss_node_table_v2_concurrency_tr", false);
+			showhide("ss_node_table_v2_tls_tr", is_http_2);
+			showhide("ss_node_table_tls_host_tr", is_http_2 && E("ss_node_table_v2_tls").checked);
+			showhide("ss_node_table_insecure_tr", is_http_2 && E("ss_node_table_v2_tls").checked);
+		}
 	}
 	if (save_flag == "trojan") {
 		showhide("ss_node_table_v2_tls_tr", true);
@@ -879,6 +980,16 @@ function verifyFields(r) {
 		showhide("ss_node_table_uplink_capacity_tr", true);	//helloworld-full
 		showhide("ss_node_table_downlink_capacity_tr", true);	//helloworld-full
 		showhide("ss_node_table_insecure_tr", true);	//helloworld-full
+	}	//helloworld-full
+	if (save_flag == "tuic") {	//helloworld-full
+		showhide("ss_node_table_tuic_uuid_tr", true);	//helloworld-full
+		showhide("ss_node_table_tuic_passwd_tr", true);	//helloworld-full
+		showhide("ss_node_table_congestion_control_tr", true);	//helloworld-full
+		showhide("ss_node_table_udp_relay_mode_tr", true);	//helloworld-full
+		showhide("ss_node_table_tls_alpn_tr", true);	//helloworld-full
+		showhide("ss_node_table_tls_host_tr", true);	//helloworld-full
+		showhide("ss_node_table_insecure_tr", true);	//helloworld-full
+		showhide("ss_node_table_disable_sni_tr", true);	//helloworld-full
 	}	//helloworld-full
 	//kcp pannel
 	E("sstable_kcp_parameter_tr").style.display = "";
@@ -950,6 +1061,7 @@ function Add_profile() { //点击节点页面内添加节点动作
 	E("v2rayTitle").style.display = "";
 	E("TrojanTitle").style.display = "";
 	E("HysteriaTitle").style.display = "";	//helloworld-full
+	if(E("TuicTitle")) E("TuicTitle").style.display = "";	//helloworld-full
 	E("add_node").style.display = "";
 	E("edit_node").style.display = "none";
 	E("continue_add").style.display = "";
@@ -966,6 +1078,10 @@ function tabclickhandler(_type) {
 	E('v2rayTitle').className = "vpnClientTitle_td_unclick";
 	E('TrojanTitle').className = "vpnClientTitle_td_unclick";
 	E('HysteriaTitle').className = "vpnClientTitle_td_unclick";	//helloworld-full
+	if(E('TuicTitle')) E('TuicTitle').className = "vpnClientTitle_td_unclick";	//helloworld-full
+	if(E('ss_node_table_username_tr')) E('ss_node_table_username_tr').style.display = "none";
+	$(".hy2_elem").closest("tr").hide();	//helloworld-full
+	$(".tuic_elem").closest("tr").hide();	//helloworld-full
 	if (_type == 0) {
 		save_flag = "shadowsocks";
 		E('ssTitle').className = "vpnClientTitle_td_click";
@@ -1135,6 +1251,26 @@ function tabclickhandler(_type) {
 		showhide("ss_node_table_v2_reality_publickey_tr", (E("ss_node_table_v2_protocol").value == "vless" && E("ss_node_table_v2_reality").checked));
 		showhide("ss_node_table_v2_reality_shortid_tr", (E("ss_node_table_v2_protocol").value == "vless" && E("ss_node_table_v2_reality").checked));
 		showhide("ss_node_table_v2_reality_spiderx_tr", (E("ss_node_table_v2_protocol").value == "vless" && E("ss_node_table_v2_reality").checked));
+		var is_socks = E("ss_node_table_v2_protocol").value == "socks";
+		var is_http = E("ss_node_table_v2_protocol").value == "http";
+		var is_socks_or_http = is_socks || is_http;
+		showhide("ss_node_table_username_tr", is_socks_or_http);
+		showhide("ss_node_table_password_tr", is_socks_or_http);
+		if(is_socks_or_http){
+			showhide("ss_node_table_v2_vmess_id_tr", false);
+			showhide("ss_node_table_v2_alter_id_tr", false);
+			showhide("ss_node_table_v2_security_tr", false);
+			showhide("ss_node_table_v2_transport_tr", false);
+			showhide("ss_node_table_v2_tcp_guise_tr", false);
+			showhide("ss_node_table_v2_kcp_guise_tr", false);
+			showhide("ss_node_table_v2_http_host_tr", false);
+			showhide("ss_node_table_v2_http_path_tr", false);
+			showhide("ss_node_table_v2_mux_tr", false);
+			showhide("ss_node_table_v2_concurrency_tr", false);
+			showhide("ss_node_table_v2_tls_tr", is_http);
+			showhide("ss_node_table_tls_host_tr", is_http && E("ss_node_table_v2_tls").checked);
+			showhide("ss_node_table_insecure_tr", is_http && E("ss_node_table_v2_tls").checked);
+		}
 		E('ss_node_table_hy2_auth_tr').style.display = "none";	//helloworld-full
 		E('ss_node_table_flag_obfs_tr').style.display = "none";	//helloworld-full
 		E('ss_node_table_tls_host_tr').style.display = "none";	//helloworld-full
@@ -1239,6 +1375,53 @@ function tabclickhandler(_type) {
 		E("ss_node_table_fast_open").checked = false;
 		E('ss_node_table_uplink_capacity_tr').style.display = "";	//helloworld-full
 		E('ss_node_table_downlink_capacity_tr').style.display = "";	//helloworld-full
+	}else if (_type == 5) {	//helloworld-full
+		save_flag = "tuic";	//helloworld-full
+		if(E('TuicTitle')) E('TuicTitle').className = "vpnClientTitle_td_click";	//helloworld-full
+		E('ss_node_table_password_tr').style.display = "none";	//helloworld-full
+		if(E('ss_node_table_username_tr')) E('ss_node_table_username_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_plugin_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_plugin_opts_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_method_ss_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_protocol_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_protocol_param_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_obfs_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_obfs_param_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_vmess_id_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_alter_id_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_security_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_protocol_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_transport_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_tcp_guise_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_kcp_guise_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_http_path_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_http_host_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_fingerprint_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_tls_flow_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_quic_security_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_quic_key_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_quic_guise_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_serviceName_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_grpc_mode_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_idle_timeout_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_health_check_timeout_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_permit_without_stream_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_initial_windows_size_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_mux_tr').style.display = "none";	//helloworld-full
+		E("ss_node_table_v2_mux").checked = false;	//helloworld-full
+		E('ss_node_table_v2_concurrency_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_tls_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_reality_tr').style.display = "none";	//helloworld-full
+		E('ss_node_table_v2_tls').value = "0";	//helloworld-full
+		E('ss_node_table_v2_reality').value = "0";	//helloworld-full
+		E('ss_node_table_tls_host_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_insecure_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_tuic_uuid_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_tuic_passwd_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_congestion_control_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_udp_relay_mode_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_tls_alpn_tr').style.display = "";	//helloworld-full
+		E('ss_node_table_disable_sni_tr').style.display = "";	//helloworld-full
 	} 
 	return save_flag;
 }
@@ -1270,6 +1453,17 @@ function add_edit_node(flag, node_idx, add) {
 		tmp_db.transport = $.trim($('#ss_node_table_v2_transport').val());
 		tmp_db.vmess_id = $.trim($('#ss_node_table_v2_vmess_id').val());
 		tmp_db.v2ray_protocol = $.trim($('#ss_node_table_v2_protocol').val());
+		if(tmp_db.v2ray_protocol == "socks" || tmp_db.v2ray_protocol == "http"){
+			tmp_db.username = $.trim($('#ss_node_table_username').val());
+			tmp_db.password = $.trim($('#ss_node_table_password').val());
+			if(tmp_db.v2ray_protocol == "http"){
+				tmp_db.tls = E("ss_node_table_v2_tls").checked ? '1' : '0';
+				if(tmp_db.tls == "1"){
+					tmp_db.tls_host = $.trim($('#ss_node_table_tls_host').val());
+					tmp_db.insecure = E("ss_node_table_insecure").checked ? '1' : '0';
+				}
+			}
+		}
 		if(tmp_db.v2ray_protocol == "vmess"){
 			tmp_db.alter_id = $.trim($('#ss_node_table_v2_alter_id').val());
 			tmp_db.security = $.trim($('#ss_node_table_v2_security').val());
@@ -1358,6 +1552,19 @@ function add_edit_node(flag, node_idx, add) {
 		tmp_db.insecure = E("ss_node_table_insecure").checked ? '1' : '0';	//helloworld-full
 		tmp_db.uplink_capacity = $.trim($('#ss_node_table_uplink_capacity').val());	//helloworld-full
 		tmp_db.downlink_capacity = $.trim($('#ss_node_table_downlink_capacity').val());	//helloworld-full
+	}else if(flag == 'tuic'){	//helloworld-full
+		tmp_db.type = "tuic";	//helloworld-full
+		tmp_db.v2ray_protocol = "tuic";	//helloworld-full
+		tmp_db.tuic_uuid = $.trim($('#ss_node_table_tuic_uuid').val());	//helloworld-full
+		tmp_db.vmess_id = tmp_db.tuic_uuid;	//helloworld-full
+		tmp_db.tuic_passwd = $.trim($('#ss_node_table_tuic_passwd').val());	//helloworld-full
+		tmp_db.password = tmp_db.tuic_passwd;	//helloworld-full
+		tmp_db.congestion_control = $.trim($('#ss_node_table_congestion_control').val());	//helloworld-full
+		tmp_db.udp_relay_mode = $.trim($('#ss_node_table_udp_relay_mode').val());	//helloworld-full
+		tmp_db.tls_alpn = $.trim($('#ss_node_table_tls_alpn').val());	//helloworld-full
+		tmp_db.tls_host = $.trim($('#ss_node_table_tls_host').val());	//helloworld-full
+		tmp_db.insecure = E("ss_node_table_insecure").checked ? '1' : '0';	//helloworld-full
+		tmp_db.disable_sni = E("ss_node_table_disable_sni").checked ? '1' : '0';	//helloworld-full
 	}
 
 	dbus["ssconf_basic_json_" + node_idx] = Base64.encode(JSON.stringify(tmp_db));
@@ -1393,6 +1600,9 @@ function add_edit_node(flag, node_idx, add) {
 				E("ss_node_table_v2_vmess_id").value = "";
 				E("ss_node_table_v2_alter_id").value = "";
 				E("ss_node_table_v2_protocol").value = "vmess";
+				if(E("ss_node_table_username")) E("ss_node_table_username").value = "";
+				if(E("ss_node_table_tuic_uuid")) E("ss_node_table_tuic_uuid").value = "";	//helloworld-full
+				if(E("ss_node_table_tuic_passwd")) E("ss_node_table_tuic_passwd").value = "";	//helloworld-full
 				if(add == 1)
 					cancel_add_rule();
 			}
@@ -1489,12 +1699,13 @@ function edit_conf_table(o) {
 	E("ssrTitle").style.display = "none";
 	E("v2rayTitle").style.display = "none";
 	E("TrojanTitle").style.display = "none";
-	E("HysteriaTitle").style.display = "none";
+	if(E("HysteriaTitle")) E("HysteriaTitle").style.display = "none";	//helloworld-full
+	if(E("TuicTitle")) E("TuicTitle").style.display = "none";	//helloworld-full
 	if (j.v2ray_protocol == "shadowsocksr") {
 		E("ssrTitle").style.display = "";
 		$("#ssrTitle").html("编辑SSR账号");
 		tabclickhandler(1);
-	} else if (j.v2ray_protocol == "vmess" || j.v2ray_protocol == "vless") {
+	} else if (j.v2ray_protocol == "vmess" || j.v2ray_protocol == "vless" || j.v2ray_protocol == "socks" || j.v2ray_protocol == "http") {
 		E("v2rayTitle").style.display = "";
 		$("#v2rayTitle").html("编辑V2Ray账号");
 		tabclickhandler(2);
@@ -1510,6 +1721,12 @@ function edit_conf_table(o) {
 		E("HysteriaTitle").style.display = "";	//helloworld-full
 		$("#HysteriaTitle").html("编辑Hysteria账号");	//helloworld-full
 		tabclickhandler(4);	//helloworld-full
+	}else if (j.v2ray_protocol == "tuic") {	//helloworld-full
+		if(E("TuicTitle")){	//helloworld-full
+			E("TuicTitle").style.display = "";	//helloworld-full
+			$("#TuicTitle").html("编辑Tuic账号");	//helloworld-full
+			tabclickhandler(5);	//helloworld-full
+		}	//helloworld-full
 	}
 	if(E("ssconf_basic_row").value == "all"){
 		var pos = $("#node_" + id)[0].offsetTop - 200;
@@ -1552,12 +1769,14 @@ function generate_node_info() {
 				obj["type"] = "0";
 			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "shadowsocksr")
 				obj["type"] = "1";
-			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "vmess" || db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "vless")
+			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "vmess" || db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "vless" || db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "socks" || db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "http")
 				obj["type"] = "2";
 			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "trojan")
 				obj["type"] = "3";
 			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "hysteria")
 				obj["type"] = "4";
+			else if(db_ss["ssconf_basic_json_" + idx].v2ray_protocol == "tuic")
+				obj["type"] = "5";
 		}
 
 		//生成一个节点的所有信息到对应对象
@@ -1681,6 +1900,12 @@ function refresh_html() {
 			html +='trojan';
 		else if(j.v2ray_protocol == "hysteria")
 			html +='hysteria';
+		else if(j.v2ray_protocol == "tuic")
+			html +='tuic';
+		else if(j.v2ray_protocol == "socks")
+			html +='socks';
+		else if(j.v2ray_protocol == "http")
+			html +='http';
 		html +='</td>';
 		//ping/丢包
 		if(node_nu && db_ss["ssconf_basic_ping_node"] != "off" && E("ssconf_basic_ping_node") != ""){
@@ -3323,7 +3548,8 @@ function set_skin(){
 														、<a href="https://github.com/XTLS/xray-core" target="_blank"><em><u>Xray</u></em></a>
 														、<a href="https://github.com/trojan-gfw/trojan" target="_blank"><em><u>Trojan</u></em></a>
 														、<a href="https://github.com/apernet/hysteria" target="_blank"><em><u>Hysteria</u></em></a>    	<!--helloworld-full-->
-														六种客户端的科学上网工具。
+														、<a href="https://github.com/Tuic/tuic" target="_blank"><em><u>TUIC</u></em></a>    	<!--helloworld-full-->
+														多种客户端的科学上网工具。
 														<a href="https://t.me/+NfDH2N_WAE81NzJl" target="_blank"><em>Telegram交流群</em></a>
 													</li>
 												</ul>
@@ -3452,11 +3678,12 @@ function set_skin(){
 													<td>
 														<table width="100%" border="0" align="left" cellpadding="0" cellspacing="0" class="vpnClientTitle">
 															<tr>
-															<td width="20%" align="center" id="ssTitle" onclick="tabclickhandler(0);">添加SS配置</td>
-															<td width="20%" align="center" id="ssrTitle" onclick="tabclickhandler(1);">添加SSR配置</td>
-															<td width="20%" align="center" id="v2rayTitle" onclick="tabclickhandler(2);">添加V2Ray配置</td>
-															<td width="20%" align="center" id="TrojanTitle" onclick="tabclickhandler(3);">添加Trojan配置</td>
-															<td width="20%" align="center" id="HysteriaTitle" onclick="tabclickhandler(4);">添加Hysteria配置</td>
+															<td width="16%" align="center" id="ssTitle" onclick="tabclickhandler(0);">添加SS配置</td>
+															<td width="16%" align="center" id="ssrTitle" onclick="tabclickhandler(1);">添加SSR配置</td>
+															<td width="17%" align="center" id="v2rayTitle" onclick="tabclickhandler(2);">添加V2Ray配置</td>
+															<td width="17%" align="center" id="TrojanTitle" onclick="tabclickhandler(3);">添加Trojan配置</td>
+															<td width="17%" align="center" id="HysteriaTitle" onclick="tabclickhandler(4);">添加Hysteria配置</td>	<!--helloworld-full-->
+															<td width="17%" align="center" id="TuicTitle" onclick="tabclickhandler(5);">添加Tuic配置</td>	<!--helloworld-full-->
 															</tr>
 															</table>
 													</td>
@@ -3473,6 +3700,7 @@ function set_skin(){
 																	{ title: '节点别名', rid:'ss_node_table_alias_tr', id:'ss_node_table_alias', type:'text', maxlen:'64', style:'width:338px'},
 																	{ title: '服务器地址', rid:'ss_node_table_server_tr', id:'ss_node_table_server', type:'text', maxlen:'64', style:'width:338px'},
 																	{ title: '服务器端口', rid:'ss_node_table_port_tr', id:'ss_node_table_port', type:'text', maxlen:'64', style:'width:338px'},
+																	{ title: '用户名', rid:'ss_node_table_username_tr', id:'ss_node_table_username', type:'text', maxlen:'64', style:'width:338px', ph:'没有请留空', hidden:"yes"},
 																	{ title: '密码', rid:'ss_node_table_password_tr', id:'ss_node_table_password', type:'text', maxlen:'64', style:'width:338px', hidden:"yes"},
 																	{ title: '加密方式', rid:'ss_node_table_method_tr', id:'ss_node_table_method', type:'select', options:option_method, style:'width:350px', value: "aes-256-cfb", hidden:"yes"},
 																	{ title: '加密方式', rid:'ss_node_table_method_ss_tr', id:'ss_node_table_method_ss', type:'select', options:option_method_aead, style:'width:350px', value: "none", hidden:"yes"},
@@ -3528,6 +3756,13 @@ function set_skin(){
 																	{ title: 'tcp fast open', rid:'ss_node_table_fast_open_tr', id:'ss_node_table_fast_open', type:'checkbox', func:'v', class:'hy2_elem', value: "false"},	//helloworld-full
 																	{ title: '混淆类型', rid:'ss_node_table_flag_obfs_tr', id:'ss_node_table_flag_obfs', type:'select', class:'hy2_elem', func:'v', options:option_hy2_obfs, maxlen:'300', style:'width:412px', value: "0"},	//helloworld-full
 																	{ title: '混淆密码', rid:'ss_node_table_salamander_tr', id:'ss_node_table_salamander', type:'text', class:'hy2_elem', maxlen:'300', style:'width:400px'},	//helloworld-full
+				// tuic
+																	{ title: '用户UUID', rid:'ss_node_table_tuic_uuid_tr', id:'ss_node_table_tuic_uuid', type:'text', class:'tuic_elem', maxlen:'100', style:'width:338px', ph:'UUID', hidden:"yes"},	//helloworld-full
+																	{ title: '密码', rid:'ss_node_table_tuic_passwd_tr', id:'ss_node_table_tuic_passwd', type:'password', class:'tuic_elem', maxlen:'100', style:'width:338px', ph:'Password', hidden:"yes"},	//helloworld-full
+																	{ title: '拥塞控制算法', rid:'ss_node_table_congestion_control_tr', id:'ss_node_table_congestion_control', type:'select', class:'tuic_elem', options:[["bbr", "BBR"], ["cubic", "CUBIC"], ["new_reno", "New Reno"]], style:'width:350px', value: "bbr", hidden:"yes"},	//helloworld-full
+																	{ title: 'UDP中继模式', rid:'ss_node_table_udp_relay_mode_tr', id:'ss_node_table_udp_relay_mode', type:'select', class:'tuic_elem', options:[["native", "Native"], ["quic", "QUIC"]], style:'width:350px', value: "native", hidden:"yes"},	//helloworld-full
+																	{ title: 'ALPN', rid:'ss_node_table_tls_alpn_tr', id:'ss_node_table_tls_alpn', type:'text', class:'tuic_elem', maxlen:'50', style:'width:338px', value: "h3", hidden:"yes"},	//helloworld-full
+																	{ title: '禁用SNI', rid:'ss_node_table_disable_sni_tr', id:'ss_node_table_disable_sni', type:'checkbox', func:'v', class:'tuic_elem', value:false, hidden:"yes"},	//helloworld-full
 																]);
 															</script>
 															</table>
@@ -3548,11 +3783,12 @@ function set_skin(){
 												<script type="text/javascript">
 													$('#table_basic').forms([
 														{ title: '节点选择', id:'sstable_node', type:'select', func:'onchange="ss_node_sel();"', options:[], value: "1"},
-														{ title: '节点类型', id:'sstable_type', type:'select', options:[["0", "SS"], ["1", "SSR"], ["2", "V2RAY"], ["3", "TROJAN"], ["4", "SOCKS5"]], value: "0", hidden:"yes"},
+														{ title: '节点类型', id:'sstable_type', type:'select', options:[["0", "SS"], ["1", "SSR"], ["2", "V2RAY"], ["3", "TROJAN"], ["4", "Hysteria"], ["5", "TUIC"]], value: "0", hidden:"yes"},
 														{ title: '模式', id:'sstable_mode', type:'select', func:'v', hint:'1', options:option_modes, value: "1"},
 														{ title: '服务器', id:'sstable_alias', type:'text', maxlen:'100', hidden:"yes"},
 														{ title: '服务器', id:'sstable_server', type:'text', maxlen:'100'},
 														{ title: '服务器端口', id:'sstable_port', type:'text', maxlen:'100'},
+														{ title: '用户名', id:'sstable_username', type:'text', maxlen:'64', ph:'没有请留空', hidden:"yes"},
 														{ title: '密码', id:'sstable_password', type:'password', maxlen:'100', peekaboo:'1', hidden:"yes"},
 														{ title: '加密方式', id:'sstable_method_ss', type:'select', func:'v', hint:'5', options:option_method_aead, hidden:"yes"},
 														{ title: '加密方式', id:'sstable_method', type:'select', func:'v', hint:'5', options:option_method, hidden:"yes"},
@@ -3608,6 +3844,13 @@ function set_skin(){
 														{ title: 'tcp fast open', id:'sstable_fast_open', type:'checkbox', class:'hy2_elem', value: "false"},	//helloworld-full
 														{ title: '混淆类型', id:'sstable_flag_obfs', type:'select', class:'hy2_elem', func:'v', options:option_hy2_obfs, maxlen:'300', style:'width:412px', value: "0"},	//helloworld-full
 														{ title: '混淆密码', id:'sstable_salamander', type:'text', class:'hy2_elem', maxlen:'300', style:'width:400px'},	//helloworld-full
+				// tuic
+														{ title: '用户UUID', id:'sstable_tuic_uuid', type:'text', class:'tuic_elem', maxlen:'100', style:'width:300px', hidden:"yes"},	//helloworld-full
+														{ title: '密码', id:'sstable_tuic_passwd', type:'password', class:'tuic_elem', maxlen:'100', peekaboo:'1', hidden:"yes"},	//helloworld-full
+														{ title: '拥塞控制算法', id:'sstable_congestion_control', type:'select', class:'tuic_elem', options:[["bbr", "BBR"], ["cubic", "CUBIC"], ["new_reno", "New Reno"]], value: "bbr", hidden:"yes"},	//helloworld-full
+														{ title: 'UDP中继模式', id:'sstable_udp_relay_mode', type:'select', class:'tuic_elem', options:[["native", "Native"], ["quic", "QUIC"]], value: "native", hidden:"yes"},	//helloworld-full
+														{ title: 'ALPN', id:'sstable_tls_alpn', type:'text', class:'tuic_elem', maxlen:'50', value: "h3", hidden:"yes"},	//helloworld-full
+														{ title: '禁用SNI', id:'sstable_disable_sni', type:'checkbox', class:'tuic_elem', func:'v', value:false, hidden:"yes"},	//helloworld-full
 													]);
 												</script>
 											</table>

@@ -7,6 +7,14 @@ DESCRIPTION="helloworld"
 HOME_URL=Module_helloworld.asp
 CURR_PATH="$( cd "$( dirname "$BASH_SOURCE[0]" )" && pwd )"
 
+sedi(){
+	if [ "$(uname)" = "Darwin" ]; then
+		sed -i '' "$@"
+	else
+		sed -i "$@"
+	fi
+}
+
 cp_rules(){
 	cp -rf ./rules/gfwlist.conf plan_f/ss/rules/
 	cp -rf ./rules/chnroute.txt plan_f/ss/rules/
@@ -31,21 +39,23 @@ gen_folder(){
 	echo $VERSION > helloworld/ss/version
 	echo $platform > helloworld/.arch
 	if [ "${pkgtype}" == "lite" ];then
-		sed -i 's/PKG_TYPE=full/PKG_TYPE=lite/g' helloworld/install.sh
-		sed -i 's/var PKG_TYPE=\"full\"/var PKG_TYPE=\"lite\"/g' helloworld/webs/Module_helloworld.asp
-		sed -i '/helloworld-full/d' helloworld/webs/Module_helloworld.asp
-		sed -i '/helloworld-full/d' helloworld/res/ss-menu.js
-		sed -i '/hysteria/d' helloworld/res/ss-menu.js
-		sed -i 's/六种客户端/五种客户端/g' helloworld/webs/Module_helloworld.asp
+		sedi 's/PKG_TYPE=full/PKG_TYPE=lite/g' helloworld/install.sh
+		sedi 's/var PKG_TYPE=\"full\"/var PKG_TYPE=\"lite\"/g' helloworld/webs/Module_helloworld.asp
+		sedi '/helloworld-full/d' helloworld/webs/Module_helloworld.asp
+		sedi '/helloworld-full/d' helloworld/res/ss-menu.js
+		sedi '/hysteria/d' helloworld/res/ss-menu.js
+		sedi '/tuic/d' helloworld/res/ss-menu.js
+		sedi 's/多种客户端/五种客户端/g' helloworld/webs/Module_helloworld.asp
+		sedi 's/六种客户端/五种客户端/g' helloworld/webs/Module_helloworld.asp
 		rm -rf helloworld/bin/hysteria
 		rm -rf helloworld/bin/ipt2socks
 		rm -rf helloworld/bin/tuic-client
 		rm -rf helloworld/bin/websocketd
 	fi
-	sed -i 's/PKG_NAME=\"helloworld_arm_full\"/PKG_NAME=\"helloworld_'${platform}'_'${pkgtype}'\"/g' helloworld/install.sh
-	sed -i 's/var PKG_ARCH=\"unknown\"/var PKG_ARCH=\"'${platform}'\"/g' helloworld/webs/Module_helloworld.asp
-	sed -i 's/[ \t]*<!--helloworld-full-->//g' helloworld/webs/Module_helloworld.asp
-	sed -i 's/[ \t]*<!--helloworld-full-->//g' helloworld/res/ss-menu.js
+	sedi 's/PKG_NAME=\"helloworld_arm_full\"/PKG_NAME=\"helloworld_'${platform}'_'${pkgtype}'\"/g' helloworld/install.sh
+	sedi 's/var PKG_ARCH=\"unknown\"/var PKG_ARCH=\"'${platform}'\"/g' helloworld/webs/Module_helloworld.asp
+	sedi 's/[ \t]*<!--helloworld-full-->//g' helloworld/webs/Module_helloworld.asp
+	sedi 's/[ \t]*<!--helloworld-full-->//g' helloworld/res/ss-menu.js
 }
 
 build_pkg() {
@@ -69,7 +79,7 @@ build_pkg() {
 }
 
 do_backup(){
-	if [ "${CURR_PATH}/../history_package" ];then
+	if [ -d "${CURR_PATH}/../history_package" ];then
 		local platform=$1
 		local pkgtype=$2
 		local HISTORY_DIR="${CURR_PATH}/../history_package/$platform"
@@ -79,7 +89,7 @@ do_backup(){
 		local backup_tar_md5=${md5value}
 		echo "备份：helloworld_${platform}_${pkgtype}_${backup_version}.tar.gz"
 			cp ${CURR_PATH}/helloworld_${platform}_${pkgtype}.tar.gz ${HISTORY_DIR}/helloworld_${platform}_${pkgtype}_${backup_version}.tar.gz
-			sed -i "/helloworld_${platform}_${pkgtype}_${backup_version}/d" ${HISTORY_DIR}/md5sum.txt
+			sedi "/helloworld_${platform}_${pkgtype}_${backup_version}/d" ${HISTORY_DIR}/md5sum.txt
 			if [ ! -f ${HISTORY_DIR}/md5sum.txt ];then
 				touch ${HISTORY_DIR}/md5sum.txt
 			fi

@@ -114,6 +114,9 @@ __get_type_abbr_name() {
 	4)
 		echo "hysteria"
 		;;
+	5)
+		echo "tuic"
+		;;
 	esac
 }
 
@@ -167,6 +170,18 @@ kill_process() {
 	if [ -n "$client_linux_process" ];then 
 		echo_date 关闭kcp协议进程...
 		killall client_linux >/dev/null 2>&1
+	fi
+	hysteria_process=$(pidof hysteria)
+	if [ -n "$hysteria_process" ]; then
+		echo_date 关闭hysteria进程...
+		killall hysteria >/dev/null 2>&1
+		kill -9 "$hysteria_process" >/dev/null 2>&1
+	fi
+	tuic_process=$(pidof tuic-client)
+	if [ -n "$tuic_process" ]; then
+		echo_date 关闭tuic-client进程...
+		killall tuic-client >/dev/null 2>&1
+		kill -9 "$tuic_process" >/dev/null 2>&1
 	fi
 	if [ "$FASTOPEN" == "1" ];then
 		echo 1 >/proc/sys/net/ipv4/tcp_fastopen
@@ -698,10 +713,10 @@ create_tuic_json() {
 }
 
 start_tuic(){
-	echo_date "开启ipt2socks进程..."
-	ipt2socks -b 0.0.0.0 -4 -s 127.0.0.1 -p 23456 -l 3333 -R &
 	echo_date "开启tuic-client主进程..."
-	tuic-client --config "$CONFIG_FILE" &
+	mkdir -p $TMP_BIN_PATH
+	ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
+	/jffs/softcenter/bin/tuic-client --config "$CONFIG_FILE" >/dev/null 2>&1 &
 	local pid
 	local i=10
 	until [ -n "$pid" ]; do
@@ -714,6 +729,57 @@ start_tuic(){
 		usleep 250000
 	done
 	echo_date "tuic-client启动成功，pid：$pid"
+
+	echo_date "开启xray透明代理转接进程(3333 -> 23456)..."
+	local CONFIG_BRIDGE="/tmp/tuic_bridge.json"
+	cat > "$CONFIG_BRIDGE" <<-EOF
+	{
+		"log": {
+			"loglevel": "warning"
+		},
+		"inbounds": [
+			{
+				"port": 3333,
+				"protocol": "dokodemo-door",
+				"settings": {
+					"network": "tcp",
+					"followRedirect": true
+				},
+				"sniffing": {
+					"enabled": true,
+					"destOverride": ["http", "tls"]
+				}
+			}
+		],
+		"outbounds": [
+			{
+				"protocol": "socks",
+				"settings": {
+					"servers": [
+						{
+							"address": "127.0.0.1",
+							"port": 23456
+						}
+					]
+				}
+			}
+		]
+	}
+	EOF
+	export GOGC=30
+	${TMP_BIN_PATH}/xray run -config="$CONFIG_BRIDGE" >/dev/null 2>&1 &
+	local xpid
+	local j=10
+	until [ -n "$xpid" ]; do
+		j=$(($j - 1))
+		xpid=$(pidof xray)
+		if [ "$j" -lt 1 ]; then
+			echo_date "xray转接进程启动失败！"
+			close_in_five
+		fi
+		usleep 250000
+	done
+	echo_date "xray转接进程启动成功，pid：$xpid"
 }
 write_cron_job() {
 	sed -i '/ssupdate/d' /var/spool/cron/crontabs/* >/dev/null 2>&1
@@ -1341,6 +1407,7 @@ gen_conf(){
 #	local udpnode=$(dbus get ssconf_basic_udpnode)
 	NODE_JSON=$(eval dbus get ssconf_basic_json_$ssconf_basic_node | base64 -d)
 	type=$(echo $NODE_JSON |jq -r .v2ray_protocol)
+	[ "$type" == "null" -o -z "$type" ] && type=$(echo $NODE_JSON |jq -r .type)
 	case $type in
 	shadowsocks)
 		NODE_TYPE=0
@@ -1354,7 +1421,7 @@ gen_conf(){
 		ln -sf /jffs/softcenter/bin/xray2 ${TMP_BIN_PATH}/xray
 		create_ss_json
 		;;
-	vmess|vless)
+	vmess|vless|socks|socks5|http|https)
 		NODE_TYPE=2
 		mkdir -p $TMP_BIN_PATH
 		ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
@@ -1366,7 +1433,7 @@ gen_conf(){
 		ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
 		create_v2ray_json
 		;;
-	hysteria)
+	hysteria|hysteria2|hy2)
 		NODE_TYPE=4
 		create_hysteria_json
 		;;

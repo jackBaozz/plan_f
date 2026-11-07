@@ -420,44 +420,253 @@ local function processData(szType, content)
 				result.tcp_path = params.path and UrlDecode(params.path) or nil
 			end
 		end
-	elseif szType == 'hysteria' then
+	elseif szType == 'hysteria' or szType == 'hysteria2' or szType == 'hy2' then
 		local alias = ""
 		if content:find("#") then
 			local idx_sp = content:find("#")
 			alias = content:sub(idx_sp + 1, -1)
-			content = content:sub(0, idx_sp - 1)
+			content = content:sub(1, idx_sp - 1)
 		end
 		result.alias = UrlDecode(alias)
 		result.type = "hysteria"
 		result.v2ray_protocol = "hysteria"
-		local dat = split(content, '%?')
-		local hostInfo = split(dat[1], ':')
-		result.server = hostInfo[1]
-		result.server_port = hostInfo[2]
+		local main_part = content
+		local query_part = ""
+		if content:find("%?") then
+			local idx_q = content:find("%?")
+			main_part = content:sub(1, idx_q - 1)
+			query_part = content:sub(idx_q + 1, -1)
+		end
+		main_part = main_part:gsub("/+$", "")
+		local auth = ""
+		local host_port = main_part
+		if main_part:find("@") then
+			local idx_at = main_part:find("@")
+			auth = main_part:sub(1, idx_at - 1)
+			host_port = main_part:sub(idx_at + 1, -1)
+		end
+		local host, port
+		if host_port:find(":") then
+			local hp = split(host_port, ":")
+			host = hp[1]
+			port = hp[2]
+		else
+			host = host_port
+			port = "443"
+		end
+		result.server = host
+		result.server_port = port
 		local params = {}
-		for _, v in pairs(split(dat[2], '&')) do
-			local t = split(v, '=')
-			if #t > 0 then
-				params[t[1]] = t[2]
+		if query_part ~= "" then
+			for _, v in pairs(split(query_part, "&")) do
+				local t = split(v, "=")
+				if #t >= 2 then
+					params[t[1]] = UrlDecode(t[2])
+				elseif #t == 1 then
+					params[t[1]] = ""
+				end
 			end
 		end
-		if params.obfsParam then
+		local hy2_auth = (auth ~= "") and auth or (params.auth or "")
+		result.hy2_auth = hy2_auth
+		result.password = hy2_auth
+		result.tls_host = params.sni or params.peer or host
+		result.insecure = (params.insecure == "1" or params["allow-insecure"] == "1" or params["insecure"] == "true") and "1" or "0"
+		local obfs_param = params["obfs-password"] or params.obfs_password or params.obfsParam or ""
+		if obfs_param ~= "" or (params.obfs and params.obfs ~= "" and params.obfs ~= "none") then
 			result.flag_obfs = "1"
+			result.salamander = obfs_param
 		else
 			result.flag_obfs = "0"
 		end
-		result.salamander = params.obfsParam
-		result.hy2_auth = params.auth
-		result.tls_host = params.peer
-		if params.insecure and params.insecure == "1" then
-			result.insecure = "1"
-		else
-			result.insecure = "0"
+		result.uplink_capacity = params.up or params.upmbps or 5
+		result.downlink_capacity = params.down or params.downmbps or 20
+		result.fast_open = (params.fastopen == "1" or params.fast_open == "1") and 1 or 0
+	elseif szType == 'tuic' then
+		local alias = ""
+		if content:find("#") then
+			local idx_sp = content:find("#")
+			alias = content:sub(idx_sp + 1, -1)
+			content = content:sub(1, idx_sp - 1)
 		end
-		-- result.alpn = params.alpn
-		result.uplink_capacity = params.upmbps and params.upmbps or 5
-		result.downlink_capacity = params.downmbps and params.downmbps or 20
-		result.fast_open = 0
+		result.alias = UrlDecode(alias)
+		result.type = "tuic"
+		result.v2ray_protocol = "tuic"
+		local main_part = content
+		local query_part = ""
+		if content:find("%?") then
+			local idx_q = content:find("%?")
+			main_part = content:sub(1, idx_q - 1)
+			query_part = content:sub(idx_q + 1, -1)
+		end
+		main_part = main_part:gsub("/+$", "")
+		local userinfo = ""
+		local host_port = main_part
+		if main_part:find("@") then
+			local idx_at = main_part:find("@")
+			userinfo = main_part:sub(1, idx_at - 1)
+			host_port = main_part:sub(idx_at + 1, -1)
+		end
+		local uuid, pass = "", ""
+		if userinfo:find(":") then
+			local u = split(userinfo, ":")
+			uuid = u[1]
+			pass = u[2]
+		else
+			uuid = userinfo
+		end
+		local host, port
+		if host_port:find(":") then
+			local hp = split(host_port, ":")
+			host = hp[1]
+			port = hp[2]
+		else
+			host = host_port
+			port = "443"
+		end
+		result.server = host
+		result.server_port = port
+		local params = {}
+		if query_part ~= "" then
+			for _, v in pairs(split(query_part, "&")) do
+				local t = split(v, "=")
+				if #t >= 2 then
+					params[t[1]] = UrlDecode(t[2])
+				elseif #t == 1 then
+					params[t[1]] = ""
+				end
+			end
+		end
+		result.tuic_uuid = uuid
+		result.vmess_id = uuid
+		result.tuic_passwd = (pass ~= "") and pass or (params.password or "")
+		result.password = result.tuic_passwd
+		result.congestion_control = params.congestion_control or "bbr"
+		result.udp_relay_mode = params.udp_relay_mode or "native"
+		result.tls_alpn = params.alpn or "h3"
+		result.tls_host = params.sni or host
+		result.insecure = (params.allow_insecure == "1" or params.insecure == "1") and "1" or "0"
+		result.disable_sni = (params.disable_sni == "1") and "1" or "0"
+	elseif szType == 'socks' or szType == 'socks5' then
+		local alias = ""
+		if content:find("#") then
+			local idx_sp = content:find("#")
+			alias = content:sub(idx_sp + 1, -1)
+			content = content:sub(1, idx_sp - 1)
+		end
+		result.alias = UrlDecode(alias)
+		result.type = "v2ray"
+		result.v2ray_protocol = "socks"
+		local main_part = content
+		if main_part:find("%?") then
+			local idx_q = main_part:find("%?")
+			main_part = main_part:sub(1, idx_q - 1)
+		end
+		main_part = main_part:gsub("/+$", "")
+		local userinfo = ""
+		local host_port = main_part
+		if main_part:find("@") then
+			local idx_at = main_part:find("@")
+			userinfo = main_part:sub(1, idx_at - 1)
+			host_port = main_part:sub(idx_at + 1, -1)
+		end
+		local username, pass = "", ""
+		if userinfo ~= "" then
+			if not userinfo:find(":") then
+				local decoded = base64Decode(userinfo)
+				if decoded:find(":") then
+					userinfo = decoded
+				end
+			end
+			if userinfo:find(":") then
+				local u = split(userinfo, ":")
+				username = u[1]
+				pass = u[2]
+			else
+				username = userinfo
+			end
+		end
+		local host, port
+		if host_port:find(":") then
+			local hp = split(host_port, ":")
+			host = hp[1]
+			port = hp[2]
+		else
+			host = host_port
+			port = "1080"
+		end
+		result.server = host
+		result.server_port = port
+		if username ~= "" or pass ~= "" then
+			result.auth_enable = "1"
+			result.username = username
+			result.password = pass
+		else
+			result.auth_enable = "0"
+		end
+	elseif szType == 'http' or szType == 'https' then
+		local alias = ""
+		if content:find("#") then
+			local idx_sp = content:find("#")
+			alias = content:sub(idx_sp + 1, -1)
+			content = content:sub(1, idx_sp - 1)
+		end
+		result.alias = UrlDecode(alias)
+		result.type = "v2ray"
+		result.v2ray_protocol = "http"
+		local main_part = content
+		if main_part:find("%?") then
+			local idx_q = main_part:find("%?")
+			main_part = main_part:sub(1, idx_q - 1)
+		end
+		main_part = main_part:gsub("/+$", "")
+		local userinfo = ""
+		local host_port = main_part
+		if main_part:find("@") then
+			local idx_at = main_part:find("@")
+			userinfo = main_part:sub(1, idx_at - 1)
+			host_port = main_part:sub(idx_at + 1, -1)
+		end
+		local username, pass = "", ""
+		if userinfo ~= "" then
+			if not userinfo:find(":") then
+				local decoded = base64Decode(userinfo)
+				if decoded:find(":") then
+					userinfo = decoded
+				end
+			end
+			if userinfo:find(":") then
+				local u = split(userinfo, ":")
+				username = u[1]
+				pass = u[2]
+			else
+				username = userinfo
+			end
+		end
+		local host, port
+		if host_port:find(":") then
+			local hp = split(host_port, ":")
+			host = hp[1]
+			port = hp[2]
+		else
+			host = host_port
+			port = (szType == "https") and "443" or "80"
+		end
+		result.server = host
+		result.server_port = port
+		if szType == "https" then
+			result.tls = "1"
+			result.tls_host = host
+		else
+			result.tls = "0"
+		end
+		if username ~= "" or pass ~= "" then
+			result.auth_enable = "1"
+			result.username = username
+			result.password = pass
+		else
+			result.auth_enable = "0"
+		end
 	else
 		-- 不支持的协议
 		result.v2ray_protocol = szType
@@ -519,6 +728,86 @@ local function check_filer(result)
 	end
 end
 
+local function parseClashYaml(text)
+	local proxies = {}
+	local in_proxies = false
+	local current = nil
+	for line in text:gmatch("[^\r\n]+") do
+		local trimmed = trim(line)
+		if trimmed:match("^proxies%s*:") then
+			in_proxies = true
+		elseif in_proxies and trimmed:match("^%-%s*name%s*:") then
+			if current then tinsert(proxies, current) end
+			current = {}
+			local k, v = trimmed:match("^%-%s*([%w_%-]+)%s*:%s*(.*)$")
+			if k and v then
+				v = v:gsub('^["\']', ''):gsub('["\']$', '')
+				current[k] = v
+			end
+		elseif in_proxies and current and trimmed:match("^[%w_%-]+%s*:") then
+			local k, v = trimmed:match("^([%w_%-]+)%s*:%s*(.*)$")
+			if k and v then
+				v = v:gsub('^["\']', ''):gsub('["\']$', '')
+				current[k] = v
+			end
+		elseif in_proxies and not line:match("^%s") and trimmed ~= "" and not trimmed:match("^#") then
+			if current then tinsert(proxies, current); current = nil end
+			in_proxies = false
+		end
+	end
+	if current then tinsert(proxies, current) end
+	return proxies
+end
+
+local function clashProxyToUrl(p)
+	local ptype = (p.type or ""):lower()
+	local name = p.name or (p.server .. ":" .. (p.port or ""))
+	local server = p.server
+	local port = p.port
+	if not server or not port then return nil end
+	if ptype == "hysteria2" or ptype == "hy2" then
+		local auth = p.password or p.auth or ""
+		local sni = p.sni or server
+		local insecure = (p["skip-cert-verify"] == "true" or p["skip-cert-verify"] == true) and "1" or "0"
+		local obfs = p.obfs or ""
+		local obfs_pass = p["obfs-password"] or ""
+		local q = "sni=" .. sni .. "&insecure=" .. insecure
+		if obfs ~= "" then q = q .. "&obfs=" .. obfs .. "&obfs-password=" .. obfs_pass end
+		return "hysteria2://" .. auth .. "@" .. server .. ":" .. port .. "/?" .. q .. "#" .. urlEncode(name)
+	elseif ptype == "tuic" then
+		local uuid = p.uuid or ""
+		local pass = p.password or ""
+		local cc = p["congestion-controller"] or p.congestion_control or "bbr"
+		local udp_mode = p["udp-relay-mode"] or "native"
+		local alpn = p.alpn or "h3"
+		local sni = p.sni or server
+		local q = "congestion_control=" .. cc .. "&udp_relay_mode=" .. udp_mode .. "&alpn=" .. alpn .. "&sni=" .. sni
+		return "tuic://" .. uuid .. ":" .. pass .. "@" .. server .. ":" .. port .. "/?" .. q .. "#" .. urlEncode(name)
+	elseif ptype == "socks5" or ptype == "socks" then
+		local u = (p.username and p.username ~= "") and (p.username .. ":" .. (p.password or "") .. "@") or ""
+		return "socks5://" .. u .. server .. ":" .. port .. "#" .. urlEncode(name)
+	elseif ptype == "http" then
+		local proto = (p.tls == "true" or p.tls == true) and "https" or "http"
+		local u = (p.username and p.username ~= "") and (p.username .. ":" .. (p.password or "") .. "@") or ""
+		return proto .. "://" .. u .. server .. ":" .. port .. "#" .. urlEncode(name)
+	elseif ptype == "trojan" then
+		local pass = p.password or ""
+		local sni = p.sni or server
+		return "trojan://" .. pass .. "@" .. server .. ":" .. port .. "?sni=" .. sni .. "#" .. urlEncode(name)
+	elseif ptype == "ss" then
+		local cipher = p.cipher or ""
+		local pass = p.password or ""
+		local userinfo = b64encode(cipher .. ":" .. pass)
+		return "ss://" .. userinfo .. "@" .. server .. ":" .. port .. "#" .. urlEncode(name)
+	elseif ptype == "vless" then
+		local uuid = p.uuid or ""
+		local security = (p.tls == "true" or p.tls == true) and "tls" or "none"
+		local sni = p.servername or p.sni or server
+		return "vless://" .. uuid .. "@" .. server .. ":" .. port .. "?security=" .. security .. "&sni=" .. sni .. "#" .. urlEncode(name)
+	end
+	return nil
+end
+
 --local execute = function()
 	-- exec
 	do
@@ -548,9 +837,26 @@ end
 				if nodes[1].server and nodes[1].method then
 					szType = 'sip008'
 				end
+			elseif raw:find('proxies%s*:') or base64Decode(raw):find('proxies%s*:') then
+				local yaml_text = raw:find('proxies%s*:') and raw or base64Decode(raw)
+				local clash_proxies = parseClashYaml(yaml_text)
+				nodes = {}
+				for _, cp in ipairs(clash_proxies) do
+					local uri = clashProxyToUrl(cp)
+					if uri then
+						tinsert(nodes, uri)
+					end
+				end
 			else
 				-- ssd 外的格式
-				nodes = split(base64Decode(raw):gsub(" ", "_"), "\n")
+				local decoded_raw = base64Decode(raw)
+				if decoded_raw:find('://') then
+					nodes = split(decoded_raw:gsub("\r\n", "\n"), "\n")
+				elseif raw:find('://') then
+					nodes = split(raw:gsub("\r\n", "\n"), "\n")
+				else
+					nodes = split(decoded_raw:gsub(" ", "_"):gsub("\r\n", "\n"), "\n")
+				end
 			end
 				for _, v in ipairs(nodes) do
 				if v then
@@ -565,10 +871,24 @@ end
 							if dat[3] then
 								dat3 = "://" .. dat[3]
 							end
-							if dat[1] == 'ss' or dat[1] == 'trojan' then
-								result = processData(dat[1], dat[2] .. dat3)
+							local proto_lower = dat[1]:lower()
+							local plain_proto = {
+								ss = true,
+								trojan = true,
+								vless = true,
+								hysteria = true,
+								hysteria2 = true,
+								hy2 = true,
+								tuic = true,
+								socks = true,
+								socks5 = true,
+								http = true,
+								https = true
+							}
+							if plain_proto[proto_lower] then
+								result = processData(proto_lower, dat[2] .. dat3)
 							else
-								result = processData(dat[1], base64Decode(dat[2]))
+								result = processData(proto_lower, base64Decode(dat[2]))
 							end
 						end
 					else

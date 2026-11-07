@@ -195,7 +195,8 @@ function pop_help() {
 			、<a target="_blank" href="https://github.com/XTLS/xray-core"><u>Xray</u></a>\
 			、<a target="_blank" href="https://github.com/trojan-gfw/trojan"><u>Trojan</u></a>\
 			、<a target="_blank" href="https://github.com/apernet/hysteria"><u>hysteria</u></a>\
-			六种客户端的科学上网工具。<br \><br \>\
+			、<a target="_blank" href="https://github.com/Tuic/tuic"><u>tuic</u></a>\
+			多种客户端的科学上网工具。<br \><br \>\
 			本插件仅支持SWRT、SWRT官改固件，请不要用于其它固件安装。<br>\
 			使用本插件有任何问题，可以前往<a style="color:#e7bd16" target="_blank" href="https://github.com/zusterben/plan_f/issues"><u>github的issue页面</u></a>反馈~<br><br>\
 			● SS/SSR一键脚本：<a style="color:#e7bd16" target="_blank" href="https://github.com/onekeyshell/kcptun_for_ss_ssr/tree/master"><u>一键安装KCPTUN for SS/SSR on Linux</u></a><br>\
