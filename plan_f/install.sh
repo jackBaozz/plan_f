@@ -156,6 +156,13 @@ install_now(){
 		echo_date 先关闭helloworld插件，保证文件更新成功!
 		sh /jffs/softcenter/ss/ssconfig.sh stop
 	fi
+	# 停止并清理可能存在的旧版fancyss/shadowsocks自启，防止旧版脚本冲突
+	if [ -f "/koolshare/ss/ssconfig.sh" ]; then
+		sh /koolshare/ss/ssconfig.sh stop >/dev/null 2>&1
+	fi
+	rm -f /koolshare/init.d/*shadowsocks*.sh /jffs/softcenter/init.d/*shadowsocks*.sh 2>/dev/null
+	cru d ssconf_reboot >/dev/null 2>&1
+	cru d ss_tri_check >/dev/null 2>&1
 
 	if [ -n "$(ls /jffs/softcenter/ss/postscripts/P*.sh 2>/dev/null)" ];then
 		echo_date 备份触发脚本!
@@ -207,6 +214,8 @@ install_now(){
 	rm -rf /jffs/softcenter/res/helloworld.css
 	find /jffs/softcenter/init.d/ -name "*helloworld.sh" | xargs rm -rf
 	find /jffs/softcenter/init.d/ -name "*socks5.sh" | xargs rm -rf
+	find /jffs/softcenter/init.d/ -name "*shadowsocks*.sh" 2>/dev/null | xargs rm -rf
+	find /koolshare/init.d/ -name "*shadowsocks*.sh" 2>/dev/null | xargs rm -rf
 
 	echo_date 开始复制文件！
 	cd /tmp

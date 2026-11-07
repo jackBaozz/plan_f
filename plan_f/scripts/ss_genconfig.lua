@@ -246,7 +246,7 @@ local Xray = {
 		queryStrategy = "UseIP"
 	},
 	-- 路由
-	routing = {
+	routing = (server.custom_dns_enable == "1") and {
 		domainStrategy = "AsIs",
 		rules = {
 			{
@@ -257,6 +257,8 @@ local Xray = {
 				outboundTag = "dns-out"
 			}
 		}
+	} or {
+		domainStrategy = "AsIs"
 	},
 	-- 传入连接
 	inbounds = {
@@ -266,7 +268,7 @@ local Xray = {
 		protocol = "dokodemo-door",
 		settings = {network = proto, followRedirect = true},
 		sniffing = {
-			enabled = (server.custom_sniffing == "1") and true or false, -- 流量嗅探
+			enabled = (server.custom_sniffing ~= "0") and true or false, -- 流量嗅探
 			routeOnly = (server.custom_routeOnly == "1") and true or false, -- 嗅探得到的域名仅用于 Xray 内部路由
 			destOverride = {"http", "tls", "quic"},
 			domainsExcluded = (server.custom_domainsExcluded == "1") and { -- 流量嗅探域名排除列表
@@ -403,8 +405,9 @@ local Xray = {
 			} or nil,
 			sockopt = {
 				tcpMptcp = (server.mptcp == "1") and true or false, -- MPTCP
-				tcpNoDelay = (server.mptcp == "1") and true or false, -- MPTCP
-				tcpcongestion = server.custom_tcpcongestion -- 连接服务器节点的 TCP 拥塞控制算法
+				tcpNoDelay = true,
+				tcpFastOpen = (server.fast_open == "1") and true or nil,
+				tcpcongestion = server.custom_tcpcongestion or nil -- 连接服务器节点的 TCP 拥塞控制算法
 			}
 		},
 		mux = {

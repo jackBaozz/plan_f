@@ -140,6 +140,8 @@ restore_conf() {
 }
 
 kill_process() {
+	# 清理旧插件可能残留的遗留进程，杜绝端口与规则冲突
+	killall -9 ss-redir rss-redir ss-tunnel rss-tunnel koolgame 2>/dev/null
 	xray_process=$(pidof xray)
 	if [ -n "$xray_process" ]; then
 		echo_date 关闭xray进程...
@@ -192,23 +194,24 @@ kill_process() {
 
 resolv_server_ip() {
 #任何情况下代理服务器都不能走代理
-	local tmp server_ip
+	local tmp server_ip retry=0
 	tmp=$(dbus get ssconf_basic_json_$ssconf_basic_node | base64 -d | jq -r .server)
-	server_ip=$(__resolve_ip "$tmp")
-	case $? in
-	0)
-		echo_date "服务器【$tmp】的ip地址解析成功：$server_ip"
-		echo "server=/$tmp/$(__get_server_resolver)#$(__get_server_resolver_port)" >/etc/dnsmasq.user/ss_server.conf
-		ssconf_basic_server_ip="$server_ip"
-		dbus set ssconf_basic_server_ip="$server_ip"
-		;;
-	*)
-		echo_date "服务器的ip地址解析失败... "
-		unset ssconf_basic_server_ip
-		dbus remvoe ssconf_basic_server_ip
-		close_in_five
-		;;
-	esac
+	while [ $retry -lt 3 ]; do
+		server_ip=$(__resolve_ip "$tmp")
+		if [ $? -eq 0 -a -n "$server_ip" ]; then
+			echo_date "服务器【$tmp】的ip地址解析成功：$server_ip"
+			echo "server=/$tmp/$(__get_server_resolver)#$(__get_server_resolver_port)" >/etc/dnsmasq.user/ss_server.conf
+			ssconf_basic_server_ip="$server_ip"
+			dbus set ssconf_basic_server_ip="$server_ip"
+			return 0
+		fi
+		retry=$(($retry + 1))
+		[ $retry -lt 3 ] && sleep 1
+	done
+	echo_date "服务器【$tmp】的ip地址解析失败... "
+	unset ssconf_basic_server_ip
+	dbus remove ssconf_basic_server_ip
+	close_in_five
 }
 
 # create shadowsocks config file...
@@ -582,25 +585,27 @@ create_v2ray_json(){
 	local tmp v2ray_server_ip
 	rm -rf "$CONFIG_FILE_TMP"
 	rm -rf "$CONFIG_FILE"
-	echo_date 生成V2Ray配置文件...
+	echo_date "生成$(__get_type_abbr_name)配置文件..."
 	/jffs/softcenter/bin/lua /jffs/softcenter/scripts/ss_genconfig.lua "$ssconf_basic_node" "$NODE_MODE" 3333 23456 > $CONFIG_FILE_TMP
 
-	echo_date 解析V2Ray配置文件...
-	cat "$CONFIG_FILE_TMP" | jq --tab . >"$CONFIG_FILE"
-	echo_date V2Ray配置文件写入成功到"$CONFIG_FILE"
-
-	echo_date 测试V2Ray配置文件.....
-	result=$(${TMP_BIN_PATH}/xray run -test -config="$CONFIG_FILE" | grep "Configuration OK.")
-	if [ -n "$result" ]; then
-		echo_date V2Ray配置文件通过测试!!!
+	if [ "$(cat $CONFIG_FILE_TMP)" != "" ]; then
+		echo_date "解析$(__get_type_abbr_name)配置文件..."
+		cat "$CONFIG_FILE_TMP" | jq --tab . >"$CONFIG_FILE" 2>/dev/null
+		if [ -s "$CONFIG_FILE" ]; then
+			echo_date "$(__get_type_abbr_name)配置文件写入成功到$CONFIG_FILE"
+		else
+			echo_date "$(__get_type_abbr_name)配置文件格式异常，请检查设置!!!"
+			rm -rf "$CONFIG_FILE_TMP"
+			rm -rf "$CONFIG_FILE"
+			close_in_five
+		fi
 	else
-		echo_date V2Ray配置文件没有通过测试，请检查设置!!!
-		result=$(${TMP_BIN_PATH}/xray run -test -config="$CONFIG_FILE")
-		echo_date "$result"
+		echo_date "$(__get_type_abbr_name)配置文件生成失败，请检查设置!!!"
 		rm -rf "$CONFIG_FILE_TMP"
 		rm -rf "$CONFIG_FILE"
 		close_in_five
 	fi
+	rm -rf "$CONFIG_FILE_TMP"
 }
 
 create_v2ray_netflix(){
@@ -632,26 +637,26 @@ create_v2ray_netflix(){
 
 start_v2ray() {
 	# tfo start
-	if [ "$ssconf_basic_tfo" == "1" ] && [ "$FASTOPEN" == "1" ]; then
+	if [ "$ssconf_basic_tfo" == "1" ]; then
 		echo_date 开启tcp fast open支持.
-		echo 3 >/proc/sys/net/ipv4/tcp_fastopen
+		echo 3 >/proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
 	fi
 
 	# v2ray start
 	export GOGC=30
 	${TMP_BIN_PATH}/xray run -config=${CONFIG_FILE} >/dev/null 2>&1 &
 	local V2PID
-	local i=10
+	local i=15
 	until [ -n "$V2PID" ]; do
 		i=$(($i - 1))
 		V2PID=$(pidof xray)
 		if [ "$i" -lt 1 ]; then
-			echo_date "v2ray进程启动失败！"
+			echo_date "$(__get_type_abbr_name)进程启动失败！"
 			close_in_five
 		fi
 		usleep 250000
 	done
-	echo_date v2ray启动成功，pid：$V2PID
+	echo_date "$(__get_type_abbr_name)启动成功，pid：$V2PID"
 }
 
 create_hysteria_json(){
@@ -1198,9 +1203,17 @@ write_numbers(){
 
 set_sys() {
 	# set_ulimit
-	ulimit -n 16384
-	echo 1 >/proc/sys/vm/overcommit_memory
-
+	ulimit -n 32768
+	echo 1 >/proc/sys/vm/overcommit_memory 2>/dev/null
+	echo 1024 >/proc/sys/net/core/somaxconn 2>/dev/null
+	echo 8192 >/proc/sys/net/ipv4/tcp_max_syn_backlog 2>/dev/null
+	echo 5000 >/proc/sys/net/core/netdev_max_backlog 2>/dev/null
+	if [ -f "/proc/sys/net/ipv4/tcp_fastopen" ]; then
+		echo 3 >/proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+	fi
+	echo 60 >/proc/sys/net/ipv4/tcp_keepalive_time 2>/dev/null
+	echo 5 >/proc/sys/net/ipv4/tcp_keepalive_intvl 2>/dev/null
+	echo 3 >/proc/sys/net/ipv4/tcp_keepalive_probes 2>/dev/null
 }
 
 remove_ssconf_reboot_job() {

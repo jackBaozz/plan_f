@@ -1,6 +1,6 @@
 # [helloworld]
 
-> 此项目为专用于 **[SWRT](https://github.com/SWRT-dev)** 及改版梅林固件路由器的 ShadowSocksR Plus 科学上网插件（当前最新版本：**v1.0.9.b**）。
+> 此项目为专用于 **[SWRT](https://github.com/SWRT-dev)** 及改版梅林固件路由器的 ShadowSocksR Plus 科学上网插件（当前最新版本：**v1.0.9.c**）。
 > 现已全新升级支持 **SS、SSR、V2Ray (VMess/VLESS)、Trojan、Hysteria 2、TUIC v5、Socks5、HTTP/HTTPS** 等多种主流代理协议！
 
 ---

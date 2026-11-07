@@ -1,6 +1,15 @@
 helloworld Changelog
 ===========================================
 
+1.0.9.c  (20261107)
+   - fix 修复底层 Xray 启动校验逻辑，改用高效原子级 JSON 语法快速验证，杜绝误判导致进程异常终止
+   - fix 修复 ss_genconfig.lua 中非自定义 DNS 模式下缺少 dns-out 目标标签导致 Xray 报错退出问题
+   - perf 优化底层网络栈吞吐性能：默认开启 TCP_NODELAY（禁用 Nagle 延迟缓冲），大幅提升并发与网页打开速度
+   - perf 优化 Linux 内核网络参数调优（ulimit 提升至 32768、somaxconn、TCP Keepalive 缩短至 60 秒防死连接堆积、FastOpen）
+   - fix 增强域名解析重试容错机制，防止拨号/网络瞬断时误触发插件保护性关闭
+   - fix 安装脚本增加对残留旧版 Fancyss/Shadowsocks 启动脚本与计划任务的清理，杜绝旧版脚本冲突导致 http/tuic 报错
+
+
 1.0.9.b  (20261107)
    - feat 全面支持 Hysteria 2、TUIC v5、Socks5、HTTP/HTTPS 四大主流代理协议
    - feat 订阅解析器增加全协议客户端 User-Agent 与自适应 Base64/Clash YAML 解析
