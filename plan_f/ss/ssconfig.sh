@@ -666,7 +666,7 @@ create_hysteria_json(){
 	echo_date 生成hysteria配置文件...
 	/jffs/softcenter/bin/lua /jffs/softcenter/scripts/ss_genconfig.lua "$ssconf_basic_node" "$NODE_MODE" 3333 23456 > $CONFIG_FILE_TMP
 
-	if [ "$(cat $CONFIG_FILE_TMP)" != "" ];then 
+	if [ -s "$CONFIG_FILE_TMP" ] && jq -e . "$CONFIG_FILE_TMP" >/dev/null 2>&1; then 
 		echo_date 解析hysteria配置文件...
 		cat "$CONFIG_FILE_TMP" | jq --tab . >"$CONFIG_FILE"
 		echo_date hysteria配置文件写入成功到"$CONFIG_FILE"
@@ -680,12 +680,12 @@ create_hysteria_json(){
 
 start_hysteria(){
 	if [ "$(/jffs/softcenter/bin/versioncmp 4.14 $KVER)" == "1" ];then
-		hysteria client --config "$CONFIG_FILE" >/dev/null 2>&1 &
+		/jffs/softcenter/bin/hysteria client --config "$CONFIG_FILE" >/dev/null 2>&1 &
 	else
-		QUIC_GO_DISABLE_ECN=true hysteria client --config "$CONFIG_FILE" >/dev/null 2>&1 &
+		QUIC_GO_DISABLE_ECN=true /jffs/softcenter/bin/hysteria client --config "$CONFIG_FILE" >/dev/null 2>&1 &
 	fi
 	local pid
-	local i=10
+	local i=15
 	until [ -n "$pid" ]; do
 		i=$(($i - 1))
 		pid=$(pidof hysteria)
@@ -705,7 +705,7 @@ create_tuic_json() {
 	echo_date 生成tuic配置文件...
 	/jffs/softcenter/bin/lua /jffs/softcenter/scripts/ss_genconfig.lua "$ssconf_basic_node" "$NODE_MODE" 3333 23456 > $CONFIG_FILE_TMP
 
-	if [ "$(cat $CONFIG_FILE_TMP)" != "" ];then 
+	if [ -s "$CONFIG_FILE_TMP" ] && jq -e . "$CONFIG_FILE_TMP" >/dev/null 2>&1; then 
 		echo_date 解析tuic配置文件...
 		cat "$CONFIG_FILE_TMP" | jq --tab . >"$CONFIG_FILE"
 		echo_date tuic配置文件写入成功到"$CONFIG_FILE"
@@ -721,9 +721,9 @@ start_tuic(){
 	echo_date "开启tuic-client主进程..."
 	mkdir -p $TMP_BIN_PATH
 	ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
-	/jffs/softcenter/bin/tuic-client --config "$CONFIG_FILE" >/dev/null 2>&1 &
+	/jffs/softcenter/bin/tuic-client -c "$CONFIG_FILE" >/dev/null 2>&1 &
 	local pid
-	local i=10
+	local i=15
 	until [ -n "$pid" ]; do
 		i=$(($i - 1))
 		pid=$(pidof tuic-client)
@@ -1421,20 +1421,21 @@ gen_conf(){
 	NODE_JSON=$(eval dbus get ssconf_basic_json_$ssconf_basic_node | base64 -d)
 	type=$(echo $NODE_JSON |jq -r .v2ray_protocol)
 	[ "$type" == "null" -o -z "$type" ] && type=$(echo $NODE_JSON |jq -r .type)
+	type=$(echo "$type" | tr 'A-Z' 'a-z')
 	case $type in
-	shadowsocks)
+	shadowsocks|ss)
 		NODE_TYPE=0
 		mkdir -p $TMP_BIN_PATH
 		ln -sf /jffs/softcenter/bin/xray2 ${TMP_BIN_PATH}/xray
 		create_ss_json
 		;;
-	shadowsocksr)
+	shadowsocksr|ssr)
 		NODE_TYPE=1
 		mkdir -p $TMP_BIN_PATH
 		ln -sf /jffs/softcenter/bin/xray2 ${TMP_BIN_PATH}/xray
 		create_ss_json
 		;;
-	vmess|vless|socks|socks5|http|https)
+	v2ray|vmess|vless|socks|socks5|http|https)
 		NODE_TYPE=2
 		mkdir -p $TMP_BIN_PATH
 		ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
@@ -1450,9 +1451,15 @@ gen_conf(){
 		NODE_TYPE=4
 		create_hysteria_json
 		;;
-	tuic)
+	tuic|tuic5)
 		NODE_TYPE=5
 		create_tuic_json
+		;;
+	*)
+		NODE_TYPE=2
+		mkdir -p $TMP_BIN_PATH
+		ln -sf /jffs/softcenter/bin/xray1 ${TMP_BIN_PATH}/xray
+		create_v2ray_json
 		;;
 	esac
 }

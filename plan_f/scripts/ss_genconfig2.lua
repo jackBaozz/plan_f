@@ -58,6 +58,14 @@ function shadowsocksr()
 	end
 end
 
+if not server.v2ray_protocol or server.v2ray_protocol == "" then
+	if server.type == "ss" or server.type == "shadowsocks" then
+		server.v2ray_protocol = "shadowsocks"
+	elseif server.type == "ssr" or server.type == "shadowsocksr" then
+		server.v2ray_protocol = "shadowsocksr"
+	end
+end
+
 local outbound = {}
 function outbound:new(o)
 	o = o or {}
@@ -70,7 +78,13 @@ function outbound:handleIndex(index)
 		shadowsocks = function()
 			shadowsocksr()
 		end,
+		ss = function()
+			shadowsocksr()
+		end,
 		shadowsocksr = function()
+			shadowsocksr()
+		end,
+		ssr = function()
 			shadowsocksr()
 		end
 	}
@@ -79,7 +93,7 @@ function outbound:handleIndex(index)
 	end
 end
 local settings = outbound:new()
-settings:handleIndex(server.v2ray_protocol)
+settings:handleIndex(server.v2ray_protocol or "shadowsocks")
 local Xray = {
 	log = {
 		-- error = "/var/ssrplus.log",

@@ -34,6 +34,10 @@ local outbound_settings = nil
 --log(jsonStringify(server));
 
 function vmess_vless()
+	local flow_val = nil
+	if (server.tls == '1' or server.reality == '1') and server.tls_flow and server.tls_flow ~= "" and server.tls_flow ~= "none" then
+		flow_val = server.tls_flow
+	end
 	outbound_settings = {
 		vnext = {
 			{
@@ -43,9 +47,9 @@ function vmess_vless()
 					{
 						id = server.vmess_id,
 						alterId = (server.v2ray_protocol == "vmess" or not server.v2ray_protocol) and tonumber(server.alter_id) or nil,
-						security = (server.v2ray_protocol == "vmess" or not server.v2ray_protocol) and server.security or nil,
-						encryption = (server.v2ray_protocol == "vless") and server.vless_encryption or nil,
-						flow = ((server.tls == '1') or (server.reality == '1')) and server.tls_flow or nil
+						security = (server.v2ray_protocol == "vmess" or not server.v2ray_protocol) and (server.security or "auto") or nil,
+						encryption = (server.v2ray_protocol == "vless") and (server.vless_encryption and server.vless_encryption ~= "" and server.vless_encryption or "none") or nil,
+						flow = flow_val
 					}
 				}
 			}
@@ -114,9 +118,6 @@ function socks_config()
 			}
 		}
 	}
-	if has_auth then
-		outbound_settings.auth = "password"
-	end
 end
 
 function http_config()
@@ -207,12 +208,21 @@ elseif server.type == "http" or server.type == "https" then
 	if not server.v2ray_protocol or server.v2ray_protocol == "" then
 		server.v2ray_protocol = "http"
 	end
+elseif server.type == "trojan" or server.v2ray_protocol == "trojan" then
+	server.v2ray_protocol = "trojan"
+	server.tls = "1"
+elseif (server.type == "ss" or server.type == "shadowsocks") and (not server.v2ray_protocol or server.v2ray_protocol == "") then
+	server.v2ray_protocol = "shadowsocks"
+elseif (server.type == "ssr" or server.type == "shadowsocksr") and (not server.v2ray_protocol or server.v2ray_protocol == "") then
+	server.v2ray_protocol = "shadowsocksr"
 end
 
 if server.v2ray_protocol == "socks5" then
 	server.v2ray_protocol = "socks"
 elseif server.v2ray_protocol == "https" then
 	server.v2ray_protocol = "http"
+	server.tls = "1"
+elseif server.v2ray_protocol == "trojan" then
 	server.tls = "1"
 end
 
@@ -300,6 +310,12 @@ local Xray = {
 			} or nil,
 		}
 	} or nil,
+	(socks_port ~= "0") and {
+		-- socks inbound for local tools & dns2socks
+		protocol = "socks",
+		port = tonumber(socks_port),
+		settings = {auth = "noauth", udp = true}
+	} or nil,
 	(server.custom_dns_enable == "1") and { -- Xray 内置 DNS
 		port = 5335,
 		protocol = "dokodemo-door",
@@ -311,7 +327,7 @@ local Xray = {
 		tag = "dns-in"
 	} or nil,
 	},
-	-- 开启 socks 代理
+	-- 开启 socks 代理兼容
 	inboundDetour = (proto:find("tcp") and socks_port ~= "0") and {
 		{
 			-- socks
@@ -328,34 +344,33 @@ local Xray = {
 		settings = outbound_settings,
 		-- 底层传输配置
 		streamSettings = {
-			network = server.transport or "tcp",
-			security = (server.tls == '1') and "tls" or (server.reality == '1') and "reality" or nil,
-			tlsSettings = (server.tls == '1') and {
+			network = (server.v2ray_protocol == "socks" or server.v2ray_protocol == "http") and "tcp" or (server.transport or "tcp"),
+			security = (server.reality == '1') and "reality" or (server.tls == '1') and "tls" or nil,
+			tlsSettings = (server.reality ~= '1' and server.tls == '1') and {
 				-- tls
 				alpn = (type(server.tls_alpn) == "table") and server.tls_alpn or (server.tls_alpn and server.tls_alpn ~= "" and {server.tls_alpn}) or nil,
 				fingerprint = (server.fingerprint == "disable") and "" or server.fingerprint,
 				allowInsecure = (server.insecure == "1"),
 				serverName = (server.tls_host and server.tls_host ~= "") and server.tls_host or server.server,
-				certificates = server.certificate and {
+				certificates = (server.certificate and server.certpath and server.certpath ~= "") and {
 					usage = "verify",
 					certificateFile = server.certpath
 				} or nil,
 			} or nil,
 			realitySettings = (server.reality == '1') and {
-				publicKey = server.reality_publickey,
-				shortId = server.reality_shortid,
-				spiderX = server.reality_spiderx,
-				fingerprint = (server.fingerprint == "disable") and "" or server.fingerprint,
-				serverName = server.tls_host
+				publicKey = server.reality_publickey or "",
+				shortId = server.reality_shortid or "",
+				spiderX = server.reality_spiderx or "",
+				fingerprint = (server.fingerprint and server.fingerprint ~= "disable") and server.fingerprint or "chrome",
+				serverName = (server.tls_host and server.tls_host ~= "") and server.tls_host or server.server
 			} or nil,
-			tcpSettings = (server.transport == "tcp" and server.tcp_guise == "http") and {
+			tcpSettings = (server.transport == "tcp" and server.tcp_guise == "http" and server.reality ~= "1" and (not server.tls_flow or not server.tls_flow:find("xtls")) and server.v2ray_protocol ~= "socks" and server.v2ray_protocol ~= "http") and {
 				-- tcp
 				header = {
 					type = server.tcp_guise,
 					request = {
-						-- request
-						path = {server.http_path} or {"/"},
-						headers = {Host = {server.http_host} or {}}
+						path = (server.http_path and server.http_path ~= "") and {server.http_path} or {"/"},
+						headers = (server.http_host and server.http_host ~= "") and {Host = {server.http_host}} or {}
 					}
 				}
 			} or nil,
@@ -499,18 +514,18 @@ local ss = {
 }
 local hysteria = {
 	server = server.server_port and (server.server .. ":" .. server.server_port) or (server.server .. ":443"),
-	bandwidth = (tonumber(server.uplink_capacity) or tonumber(server.downlink_capacity)) and {
-		up = tonumber(server.uplink_capacity) and (tonumber(server.uplink_capacity) .. " mbps") or nil,
-		down = tonumber(server.downlink_capacity) and (tonumber(server.downlink_capacity) .. " mbps") or nil 
+	bandwidth = ((server.uplink_capacity and tonumber(server.uplink_capacity) and tonumber(server.uplink_capacity) > 0) or (server.downlink_capacity and tonumber(server.downlink_capacity) and tonumber(server.downlink_capacity) > 0)) and {
+		up = (server.uplink_capacity and tonumber(server.uplink_capacity) and tonumber(server.uplink_capacity) > 0) and (tonumber(server.uplink_capacity) .. " mbps") or (tonumber(server.downlink_capacity) .. " mbps"),
+		down = (server.downlink_capacity and tonumber(server.downlink_capacity) and tonumber(server.downlink_capacity) > 0) and (tonumber(server.downlink_capacity) .. " mbps") or (tonumber(server.uplink_capacity) .. " mbps")
 	} or nil,
 	socks5 = (proto:find("tcp") and tonumber(socks_port) and tonumber(socks_port) ~= 0) and {
 		listen = "0.0.0.0:" .. tonumber(socks_port),
-		disable_udp = false
+		disableUDP = false
 	} or nil,
 	transport = {
 		type = "udp",
 		udp = {
-			hopInterval = "30 s"
+			hopInterval = "30s"
 		}
 	},
 	tcpRedirect = (proto:find("tcp") and local_port ~= "0") and {
@@ -523,12 +538,12 @@ local hysteria = {
 		type = "salamander",
 		salamander = { password = server.salamander }
 	} or nil,
-	auth = (server.hy2_auth and server.hy2_auth ~= "") and server.hy2_auth or (server.password or ""),
+	auth = (server.auth and server.auth ~= "") and server.auth or (server.hy2_auth and server.hy2_auth ~= "") and server.hy2_auth or (server.password or ""),
 	tls = {
 		sni = (server.tls_host and server.tls_host ~= "") and server.tls_host or server.server,
 		insecure = (server.insecure == "1") and true or false
 	},
-	fast_open = (server.fast_open == "1" or server.fast_open == true) and true or false,
+	fastOpen = (server.fast_open == "1" or server.fast_open == true) and true or false,
 }
 local tuic = {
 	relay = {
@@ -536,13 +551,13 @@ local tuic = {
 		ip = (server.tuic_ip and server.tuic_ip ~= "") and server.tuic_ip or nil,
 		uuid = (server.tuic_uuid and server.tuic_uuid ~= "") and server.tuic_uuid or (server.vmess_id or ""),
 		password = (server.tuic_passwd and server.tuic_passwd ~= "") and server.tuic_passwd or (server.password or ""),
-		certificates = server.certificate and { server.certpath } or nil,
+		certificates = (server.certificate and server.certpath and server.certpath ~= "") and { server.certpath } or nil,
 		udp_relay_mode = (server.udp_relay_mode and server.udp_relay_mode ~= "") and server.udp_relay_mode or "native",
 		congestion_control = (server.congestion_control and server.congestion_control ~= "") and server.congestion_control or "bbr",
-		heartbeat = server.heartbeat and (server.heartbeat .. "s") or "10s",
-		timeout = server.timeout and (server.timeout .. "s") or "30s",
-		gc_interval = server.gc_interval and (server.gc_interval .. "s") or "3s",
-		gc_lifetime = server.gc_lifetime and (server.gc_lifetime .. "s") or "15s",
+		heartbeat = (server.heartbeat and server.heartbeat ~= "") and (server.heartbeat .. "s") or "10s",
+		timeout = (server.timeout and server.timeout ~= "") and (server.timeout .. "s") or "30s",
+		gc_interval = (server.gc_interval and server.gc_interval ~= "") and (server.gc_interval .. "s") or "3s",
+		gc_lifetime = (server.gc_lifetime and server.gc_lifetime ~= "") and (server.gc_lifetime .. "s") or "15s",
 		alpn = (type(server.tls_alpn) == "table") and server.tls_alpn or (server.tls_alpn and server.tls_alpn ~= "" and { server.tls_alpn }) or { "h3" },
 		disable_sni = (server.disable_sni == "1") and true or false,
 		zero_rtt_handshake = (server.zero_rtt_handshake == "1") and true or false,
@@ -550,7 +565,7 @@ local tuic = {
 		receive_window = tonumber(server.receive_window) or 8388608
 	},
 	["local"] = {
-		server = tonumber(socks_port) and (server.tuic_dual_stack == "1" and "[::1]:" or "127.0.0.1:") .. (socks_port == "0" and local_port or tonumber(socks_port)),
+		server = "127.0.0.1:" .. (socks_port == "0" and "23456" or tonumber(socks_port)),
 		dual_stack = (server.tuic_dual_stack == "1") and true or false,
 		max_packet_size = tonumber(server.tuic_max_package_size) or 1500
 	}
@@ -565,26 +580,28 @@ end
 function config:handleIndex(index)
 	local switch = {
 		ss = function()
-			ss.protocol = socks_port
-			if server.plugin and server.plugin ~= "none" then
-				ss.plugin = server.plugin
-				ss.plugin_opts = server.plugin_opts or nil
-			end
-			print(jsonStringify(ss))
+			print(jsonStringify(Xray))
+		end,
+		shadowsocks = function()
+			print(jsonStringify(Xray))
 		end,
 		ssr = function()
-			ss.protocol = server.protocol
-			ss.protocol_param = server.protocol_param
-			ss.method = server.encrypt_method
-			ss.obfs = server.obfs
-			ss.obfs_param = server.obfs_param
-			print(jsonStringify(ss))
+			print(jsonStringify(Xray))
+		end,
+		shadowsocksr = function()
+			print(jsonStringify(Xray))
 		end,
 		v2ray = function()
 			print(jsonStringify(Xray))
 		end,
+		vmess = function()
+			print(jsonStringify(Xray))
+		end,
+		vless = function()
+			print(jsonStringify(Xray))
+		end,
 		trojan = function()
-			print(jsonStringify(trojan))
+			print(jsonStringify(Xray))
 		end,
 		naiveproxy = function()
 			print(jsonStringify(naiveproxy))
@@ -592,7 +609,16 @@ function config:handleIndex(index)
 		hysteria = function()
 			print(jsonStringify(hysteria))
 		end,
+		hysteria2 = function()
+			print(jsonStringify(hysteria))
+		end,
+		hy2 = function()
+			print(jsonStringify(hysteria))
+		end,
 		tuic = function()
+			print(jsonStringify(tuic))
+		end,
+		tuic5 = function()
 			print(jsonStringify(tuic))
 		end,
 		socks = function()
@@ -614,7 +640,10 @@ function config:handleIndex(index)
 end
 local f = config:new()
 local node_type = server.type
-if node_type == "v2ray" and (server.v2ray_protocol == "hysteria" or server.v2ray_protocol == "tuic") then
+if (node_type == "v2ray" or not node_type or node_type == "") and (server.v2ray_protocol == "hysteria" or server.v2ray_protocol == "hysteria2" or server.v2ray_protocol == "hy2" or server.v2ray_protocol == "tuic" or server.v2ray_protocol == "tuic5") then
 	node_type = server.v2ray_protocol
+end
+if not node_type or node_type == "" then
+	node_type = server.v2ray_protocol or "v2ray"
 end
 f:handleIndex(node_type)

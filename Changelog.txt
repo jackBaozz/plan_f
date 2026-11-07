@@ -2,6 +2,11 @@ helloworld Changelog
 ===========================================
 
 1.0.9.c  (20261107)
+   - fix 彻底修复 VLESS Reality 与 Vision 协议适配：解决 TLS 与 Reality 选项共存时导致 Reality 被覆盖失效的问题，增强公钥/短ID/回落SNI容错，禁用与 Vision 冲突的 HTTP 伪装头
+   - fix 彻底修复 Hysteria 2 配置与启动逻辑：对齐 v2 客户端 mapstructure 字段规范（disableUDP、fastOpen、时间格式去空格、带宽高容错、salamander 混淆规范）
+   - fix 彻底修复 TUIC v5 链路：锁定本地 Socks5 监听至 127.0.0.1:23456，配合 Xray dokodemo-door (3333 -> 23456) 与 dns2socks 实现无缝透明代理和域名解析
+   - fix 修复 Trojan、Socks5、HTTP/HTTPS 在 Xray1 模式下的出站与用户认证字段，解决弹窗保存时丢弃用户名密码问题
+   - fix 修复前端节点编辑弹窗顺序覆盖缺陷与复选框状态判定，列表支持按具体协议类型（含 vless-reality 等）精准显示与排序
    - fix 修复底层 Xray 启动校验逻辑，改用高效原子级 JSON 语法快速验证，杜绝误判导致进程异常终止
    - fix 修复 ss_genconfig.lua 中非自定义 DNS 模式下缺少 dns-out 目标标签导致 Xray 报错退出问题
    - perf 优化底层网络栈吞吐性能：默认开启 TCP_NODELAY（禁用 Nagle 延迟缓冲），大幅提升并发与网页打开速度

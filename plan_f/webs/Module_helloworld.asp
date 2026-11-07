@@ -265,24 +265,27 @@ function conf2obj(obj, p) {
 			E(p + "v2_security").value = c.security || "auto";
 		}
 		if(c.v2ray_protocol == "vless"){
-			E(p + "v2_encryption").value = c.vless_encryption;
-			E(p + "v2_reality").value = c.reality || "0";
-			E(p + "v2_reality").checked =  E(p + "v2_reality").value != 0;
+			E(p + "v2_encryption").value = c.vless_encryption || "none";
+			var is_reality = (c.reality == "1" || c.reality == 1);
+			E(p + "v2_reality").checked = is_reality;
+			E(p + "v2_reality").value = is_reality ? "1" : "0";
 			E(p + "v2_tls_flow").value = c.tls_flow || "xtls-rprx-vision";
-			if(E(p + "v2_reality").checked){
+			if(is_reality){
 				E(p + "v2_reality_publickey").value = c.reality_publickey || "";
 				E(p + "v2_reality_shortid").value = c.reality_shortid || "";
 				E(p + "v2_reality_spiderx").value = c.reality_spiderx || "";
+				E(p + "v2_tls").checked = false;
+				E(p + "v2_tls").value = "0";
 			}
 		}
 		E(p + "v2_transport").value = transport;
-		if(E(p + "v2_reality").checked == false){
+		if(!E(p + "v2_reality").checked){
 			E(p + "v2_mux").value = c.mux || "0";
 			E(p + "v2_mux").checked =  E(p + "v2_mux").value != 0;
 			E(p + "v2_concurrency").value = c.concurrency || "4";
+			E(p + "v2_tls").value = c.tls || "0";
+			E(p + "v2_tls").checked =  E(p + "v2_tls").value != 0;
 		}
-		E(p + "v2_tls").value = c.tls || "0";
-		E(p + "v2_tls").checked =  E(p + "v2_tls").value != 0;
 		if(E(p + "v2_tls").checked || E(p + "v2_reality").checked){
 			E(p + "tls_host").value = c.tls_host || "";
 			E(p + "v2_fingerprint").value = c.fingerprint || "disable";
@@ -290,8 +293,12 @@ function conf2obj(obj, p) {
 		E(p + "insecure").value = c.insecure || "0";
 		E(p + "insecure").checked =  E(p + "insecure").value != 0;
 		if (transport == "tcp") {
-			E(p + "v2_tcp_guise").value = c.tcp_guise || "none";
-			if(c.tcp_guise == "http"){
+			if(E(p + "v2_reality").checked){
+				E(p + "v2_tcp_guise").value = "none";
+			} else {
+				E(p + "v2_tcp_guise").value = c.tcp_guise || "none";
+			}
+			if(E(p + "v2_tcp_guise").value == "http"){
 				E(p + "v2_http_host").value = c.http_host || "";;
 				E(p + "v2_http_path").value = c.http_path || "";;
 			}
@@ -571,7 +578,7 @@ function save() {
 				tmp_db.security = E("sstable_v2_security").value;
 			}
 			if(tmp_db.v2ray_protocol == "vless"){
-				tmp_db.vless_encryption = E("sstable_v2_encryption").value;
+				tmp_db.vless_encryption = E("sstable_v2_encryption").value || "none";
 				tmp_db.reality = E("sstable_v2_reality").checked ? '1' : '0';
 				tmp_db.tls_flow = E("sstable_v2_tls_flow").value;
 				if(E("sstable_v2_reality").checked == true){
@@ -580,7 +587,7 @@ function save() {
 						tmp_db.reality_spiderx = E("sstable_v2_reality_spiderx").value;
 				}
 			}
-			tmp_db.tls = E("sstable_v2_tls").checked ? '1' : '0';
+			tmp_db.tls = (tmp_db.reality == "1") ? '0' : (E("sstable_v2_tls").checked ? '1' : '0');
 			if(E("sstable_v2_reality").checked == false){
 				tmp_db.mux = E("sstable_v2_mux").checked ? '1' : '0';
 				tmp_db.concurrency = E("sstable_v2_concurrency").value;
@@ -1243,8 +1250,8 @@ function tabclickhandler(_type) {
 		var host_on_2 = E("ss_node_table_v2_transport").value == "ws" || E("ss_node_table_v2_transport").value == "h2" || http_on_2;
 		var path_on_2 = E("ss_node_table_v2_transport").value == "ws" || E("ss_node_table_v2_transport").value == "h2" || E("ss_node_table_v2_transport").value == "mkcp";
 		showhide("ss_node_table_v2_tcp_guise_tr", (E("ss_node_table_v2_transport").value == "tcp"));
-		showhide("ss_node_table_v2_reality_tr", (E("ss_node_table_v2_protocol").value == "vless" && E('ss_node_table_v2_tls').value != "1"));
-		showhide("ss_node_table_v2_tls_flow_tr", (E("ss_node_table_v2_tls").value == "1" && E('ss_node_table_v2_reality').value == "1"));
+		showhide("ss_node_table_v2_reality_tr", (E("ss_node_table_v2_protocol").value == "vless" && E('ss_node_table_v2_tls').checked != true));
+		showhide("ss_node_table_v2_tls_flow_tr", (E("ss_node_table_v2_protocol").value == "vless" && E("ss_node_table_v2_transport").value == "tcp" && (E("ss_node_table_v2_tls").checked || E("ss_node_table_v2_reality").checked)));
 		showhide("ss_node_table_v2_kcp_guise_tr", (E("ss_node_table_v2_transport").value == "mkcp"));
 		showhide("ss_node_table_v2_http_host_tr", host_on_2);
 		showhide("ss_node_table_v2_http_path_tr", path_on_2);
@@ -1472,6 +1479,7 @@ function add_edit_node(flag, node_idx, add) {
 		if(tmp_db.v2ray_protocol == "socks" || tmp_db.v2ray_protocol == "http"){
 			tmp_db.username = $.trim($('#ss_node_table_username').val());
 			tmp_db.password = $.trim($('#ss_node_table_password').val());
+			tmp_db.transport = "tcp";
 			if(tmp_db.v2ray_protocol == "http"){
 				tmp_db.tls = E("ss_node_table_v2_tls").checked ? '1' : '0';
 				if(tmp_db.tls == "1"){
@@ -1487,7 +1495,7 @@ function add_edit_node(flag, node_idx, add) {
 		}
 		if(tmp_db.v2ray_protocol == "vless"){
 			tmp_db.v2ray_protocol = "vless";
-			tmp_db.vless_encryption = $.trim($('#ss_node_table_v2_encryption').val());
+			tmp_db.vless_encryption = $.trim($('#ss_node_table_v2_encryption').val()) || "none";
 			tmp_db.reality = E("ss_node_table_v2_reality").checked ? '1' : '0';
 			if(tmp_db.reality == "1"){
 				tmp_db.reality_publickey = $.trim($('#ss_node_table_v2_reality_publickey').val());
@@ -1495,7 +1503,7 @@ function add_edit_node(flag, node_idx, add) {
 				tmp_db.reality_spiderx = $.trim($('#ss_node_table_v2_reality_spiderx').val());
 			}
 		}
-		tmp_db.tls = E("ss_node_table_v2_tls").checked ? '1' : '0';
+		tmp_db.tls = (tmp_db.reality == "1") ? '0' : (E("ss_node_table_v2_tls").checked ? '1' : '0');
 		tmp_db.mux = E("ss_node_table_v2_mux").checked ? '1' : '0';
 		tmp_db.concurrency = $.trim($('#ss_node_table_v2_concurrency').val());
 		if(tmp_db.tls == "1" || tmp_db.reality == "1"){
@@ -1704,7 +1712,6 @@ function edit_conf_table(o) {
 		alert("提醒：这个节点正在运行！\n如果更改了其中的参数，需要重新点击【保存&应用】才能生效！")
 	}
 	var c = confs[id];
-	conf2obj(c, p);
 	var j = JSON.parse(c["json"]);
 
 	E("cancelBtn1").style.display = "";
@@ -1717,32 +1724,49 @@ function edit_conf_table(o) {
 	E("TrojanTitle").style.display = "none";
 	if(E("HysteriaTitle")) E("HysteriaTitle").style.display = "none";	//helloworld-full
 	if(E("TuicTitle")) E("TuicTitle").style.display = "none";	//helloworld-full
-	if (j.v2ray_protocol == "shadowsocksr") {
+	if (j.v2ray_protocol == "shadowsocksr" || j.type == "ssr" || j.type == "shadowsocksr") {
 		E("ssrTitle").style.display = "";
 		$("#ssrTitle").html("编辑SSR账号");
 		tabclickhandler(1);
-	} else if (j.v2ray_protocol == "vmess" || j.v2ray_protocol == "vless" || j.v2ray_protocol == "socks" || j.v2ray_protocol == "http") {
+	} else if (j.v2ray_protocol == "vmess" || j.v2ray_protocol == "vless" || j.v2ray_protocol == "socks" || j.v2ray_protocol == "http" || j.type == "v2ray") {
 		E("v2rayTitle").style.display = "";
 		$("#v2rayTitle").html("编辑V2Ray账号");
 		tabclickhandler(2);
-	}else if (j.v2ray_protocol == "shadowsocks") {
+	}else if (j.v2ray_protocol == "shadowsocks" || j.type == "ss" || j.type == "shadowsocks") {
 		E("ssTitle").style.display = "";
 		$("#ssTitle").html("编辑ss账号");
 		tabclickhandler(0);
-	}else if (j.v2ray_protocol == "trojan") {
+	}else if (j.v2ray_protocol == "trojan" || j.type == "trojan") {
 		E("TrojanTitle").style.display = "";
 		$("#TrojanTitle").html("编辑Trojan账号");
 		tabclickhandler(3);
-	}else if (j.v2ray_protocol == "hysteria") {	//helloworld-full
+	}else if (j.v2ray_protocol == "hysteria" || j.v2ray_protocol == "hysteria2" || j.v2ray_protocol == "hy2" || j.type == "hysteria") {	//helloworld-full
 		E("HysteriaTitle").style.display = "";	//helloworld-full
 		$("#HysteriaTitle").html("编辑Hysteria账号");	//helloworld-full
 		tabclickhandler(4);	//helloworld-full
-	}else if (j.v2ray_protocol == "tuic") {	//helloworld-full
+	}else if (j.v2ray_protocol == "tuic" || j.type == "tuic") {	//helloworld-full
 		if(E("TuicTitle")){	//helloworld-full
 			E("TuicTitle").style.display = "";	//helloworld-full
 			$("#TuicTitle").html("编辑Tuic账号");	//helloworld-full
 			tabclickhandler(5);	//helloworld-full
 		}	//helloworld-full
+	}
+	conf2obj(c, p);
+	if (j.v2ray_protocol == "vless" || j.v2ray_protocol == "vmess" || j.v2ray_protocol == "socks" || j.v2ray_protocol == "http" || j.type == "v2ray") {
+		var vless_on_2 = (E("ss_node_table_v2_protocol").value == "vless");
+		var is_socks_2 = (E("ss_node_table_v2_protocol").value == "socks");
+		var is_http_2 = (E("ss_node_table_v2_protocol").value == "http");
+		var is_socks_or_http_2 = is_socks_2 || is_http_2;
+		showhide("ss_node_table_username_tr", is_socks_or_http_2);
+		showhide("ss_node_table_password_tr", is_socks_or_http_2);
+		showhide("ss_node_table_v2_reality_tr", (vless_on_2 && E("ss_node_table_v2_tls").checked != true));
+		showhide("ss_node_table_v2_tls_tr", (!is_socks_2 && E("ss_node_table_v2_reality").checked != true));
+		showhide("ss_node_table_tls_host_tr", (E("ss_node_table_v2_tls").checked || E("ss_node_table_v2_reality").checked));
+		showhide("ss_node_table_insecure_tr", (E("ss_node_table_v2_tls").checked));
+		showhide("ss_node_table_v2_reality_publickey_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
+		showhide("ss_node_table_v2_reality_shortid_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
+		showhide("ss_node_table_v2_reality_spiderx_tr", (vless_on_2 && E("ss_node_table_v2_reality").checked));
+		showhide("ss_node_table_v2_tls_flow_tr", (vless_on_2 && E("ss_node_table_v2_transport").value == "tcp" && (E("ss_node_table_v2_tls").checked || E("ss_node_table_v2_reality").checked)));
 	}
 	if(E("ssconf_basic_row").value == "all"){
 		var pos = $("#node_" + id)[0].offsetTop - 200;
@@ -1907,22 +1931,26 @@ function refresh_html() {
 		html += '</td>';
 		//节点类型
 		html +='<td style="width:' + width[4] + ';">';
-		if(j.v2ray_protocol == "shadowsocks")
+		if(j.v2ray_protocol == "shadowsocks" || j.type == "ss" || j.type == "shadowsocks")
 			html +='ss';
-		else if(j.v2ray_protocol == "shadowsocksr")
+		else if(j.v2ray_protocol == "shadowsocksr" || j.type == "ssr" || j.type == "shadowsocksr")
 			html +='ssr';
-		else if(j.v2ray_protocol == "vmess" || j.v2ray_protocol == "vless")
-			html +='v2ray';
-		else if(j.v2ray_protocol == "trojan")
+		else if(j.v2ray_protocol == "vless")
+			html += (j.reality == "1" ? 'vless-reality' : 'vless');
+		else if(j.v2ray_protocol == "vmess" || j.type == "v2ray")
+			html +='vmess';
+		else if(j.v2ray_protocol == "trojan" || j.type == "trojan")
 			html +='trojan';
-		else if(j.v2ray_protocol == "hysteria")
+		else if(j.v2ray_protocol == "hysteria" || j.v2ray_protocol == "hysteria2" || j.v2ray_protocol == "hy2" || j.type == "hysteria")
 			html +='hysteria';
-		else if(j.v2ray_protocol == "tuic")
+		else if(j.v2ray_protocol == "tuic" || j.type == "tuic")
 			html +='tuic';
-		else if(j.v2ray_protocol == "socks")
+		else if(j.v2ray_protocol == "socks" || j.v2ray_protocol == "socks5" || j.type == "socks" || j.type == "socks5")
 			html +='socks';
-		else if(j.v2ray_protocol == "http")
+		else if(j.v2ray_protocol == "http" || j.v2ray_protocol == "https" || j.type == "http" || j.type == "https")
 			html +='http';
+		else
+			html += (j.v2ray_protocol || j.type || 'v2ray');
 		html +='</td>';
 		//ping/丢包
 		if(node_nu && db_ss["ssconf_basic_ping_node"] != "off" && E("ssconf_basic_ping_node") != ""){
@@ -2060,7 +2088,7 @@ function get_node_type_val(node_id) {
 			if (t) return t;
 		} catch(e) {}
 	}
-	var txt = $("#node_" + node_id + " td:nth-child(4)").text() || "";
+	var txt = $("#node_" + node_id + " td:nth-child(5)").text() || "";
 	return $.trim(txt).toLowerCase();
 }
 

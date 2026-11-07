@@ -386,11 +386,15 @@ local function processData(szType, content)
 		result.vmess_id = url.user
 		result.vless_encryption = params.encryption or "none"
 		result.transport = params.type or "tcp"
-		result.tls = (params.security == "tls" or params.security == "xtls") and "1" or "0"
-		result.tls_host = params.sni
-		result.tls_flow = (params.security == "tls" or params.security == "reality") and params.flow or nil
-		result.fingerprint = params.fp
 		result.reality = (params.security == "reality") and "1" or "0"
+		if result.reality == "1" then
+			result.tls = "0"
+		else
+			result.tls = (params.security == "tls" or params.security == "xtls") and "1" or "0"
+		end
+		result.tls_host = params.sni or params.peer or nil
+		result.tls_flow = (params.security == "tls" or params.security == "xtls" or params.security == "reality") and params.flow or nil
+		result.fingerprint = params.fp or "disable"
 		result.reality_publickey = params.pbk and UrlDecode(params.pbk) or nil
 		result.reality_shortid = params.sid
 		result.reality_spiderx = params.spx and UrlDecode(params.spx) or nil
@@ -419,7 +423,7 @@ local function processData(szType, content)
 			result.serviceName = params.serviceName
 			result.grpc_mode = params.mode or "gun"
 		elseif result.transport == "tcp" then
-			result.tcp_guise = params.headerType or "none"
+			result.tcp_guise = (result.reality == "1" or (result.tls_flow and result.tls_flow:find("xtls"))) and "none" or (params.headerType or "none")
 			if result.tcp_guise == "http" then
 				result.tcp_host = params.host and UrlDecode(params.host) or nil
 				result.tcp_path = params.path and UrlDecode(params.path) or nil
@@ -829,9 +833,39 @@ local function clashProxyToUrl(p)
 		return "ss://" .. userinfo .. "@" .. server .. ":" .. port .. "#" .. urlEncode(name)
 	elseif ptype == "vless" then
 		local uuid = p.uuid or ""
-		local security = (p.tls == "true" or p.tls == true) and "tls" or "none"
+		local is_reality = (p["reality-opts"] or p.reality or p.pbk or p["public-key"]) and true or false
+		local security = is_reality and "reality" or ((p.tls == "true" or p.tls == true) and "tls" or "none")
 		local sni = p.servername or p.sni or server
-		return "vless://" .. uuid .. "@" .. server .. ":" .. port .. "?security=" .. security .. "&sni=" .. sni .. "#" .. urlEncode(name)
+		local flow = p.flow or ""
+		local q = "security=" .. security .. "&sni=" .. sni
+		if flow ~= "" then q = q .. "&flow=" .. flow end
+		if is_reality then
+			local ropts = (type(p["reality-opts"]) == "table") and p["reality-opts"] or {}
+			local pbk = p.pbk or p["public-key"] or ropts["public-key"] or ropts.pbk or ""
+			local sid = p.sid or p["short-id"] or ropts["short-id"] or ropts.sid or ""
+			local spx = p.spx or p.spiderx or ropts.spiderx or ""
+			if pbk ~= "" then q = q .. "&pbk=" .. urlEncode(pbk) end
+			if sid ~= "" then q = q .. "&sid=" .. urlEncode(sid) end
+			if spx ~= "" then q = q .. "&spx=" .. urlEncode(spx) end
+		end
+		return "vless://" .. uuid .. "@" .. server .. ":" .. port .. "?" .. q .. "#" .. urlEncode(name)
+	elseif ptype == "vmess" then
+		local vdata = {
+			v = "2",
+			ps = name,
+			add = server,
+			port = port,
+			id = p.uuid or "",
+			aid = p.alterId or "0",
+			scy = p.cipher or "auto",
+			net = p.network or "tcp",
+			type = "none",
+			host = (type(p["ws-opts"]) == "table" and type(p["ws-opts"].headers) == "table") and p["ws-opts"].headers.Host or (p.servername or ""),
+			path = (type(p["ws-opts"]) == "table") and (p["ws-opts"].path or "/") or "/",
+			tls = (p.tls == "true" or p.tls == true) and "tls" or "none",
+			sni = p.servername or p.sni or ""
+		}
+		return "vmess://" .. b64encode(jsonStringify(vdata))
 	end
 	return nil
 end
