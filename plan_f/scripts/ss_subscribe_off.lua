@@ -18,19 +18,24 @@ local i = 1
 -- base64
 local function base64Decode(text)
 	local raw = text
-	if not text then return '' end
+	if not text or text == "" then return "" end
 	text = text:gsub("%z", "")
+	text = text:gsub("%s+", "")
 	text = text:gsub("_", "/")
 	text = text:gsub("-", "+")
 	local mod4 = #text % 4
-	text = text .. string.sub('====', mod4 + 1)
-	local result = b64decode(text)
-	
-	if type(result) == nil then
-		local resultt = io.popen('echo ' .. text .. '|base64 -d')
-		result = resultt:read("*a")
+	if mod4 > 0 then
+		text = text .. string.sub("====", mod4 + 1)
 	end
-	if result then
+	local result = b64decode(text)
+	if not result or result == "" then
+		local resultt = io.popen('echo -n "' .. text .. '" | base64 -d 2>/dev/null')
+		if resultt then
+			result = resultt:read("*a")
+			resultt:close()
+		end
+	end
+	if result and result ~= "" then
 		return result:gsub("%z", "")
 	else
 		return raw
@@ -500,6 +505,12 @@ local function processData(szType, content)
 			query_part = content:sub(idx_q + 1, -1)
 		end
 		main_part = main_part:gsub("/+$", "")
+		if not main_part:find(":") or not main_part:find("@") then
+			local decoded = base64Decode(main_part)
+			if decoded:find(":") then
+				main_part = decoded
+			end
+		end
 		local userinfo = ""
 		local host_port = main_part
 		if main_part:find("@") then
@@ -509,23 +520,23 @@ local function processData(szType, content)
 		end
 		local uuid, pass = "", ""
 		if userinfo:find(":") then
-			local u = split(userinfo, ":")
-			uuid = u[1]
-			pass = u[2]
+			local idx_c = userinfo:find(":")
+			uuid = userinfo:sub(1, idx_c - 1)
+			pass = userinfo:sub(idx_c + 1, -1)
 		else
 			uuid = userinfo
 		end
 		local host, port
 		if host_port:find(":") then
-			local hp = split(host_port, ":")
-			host = hp[1]
-			port = hp[2]
+			local idx_p = host_port:match(".*():")
+			host = host_port:sub(1, idx_p - 1)
+			port = host_port:sub(idx_p + 1, -1):match("%d+")
 		else
 			host = host_port
 			port = "443"
 		end
-		result.server = host
-		result.server_port = port
+		result.server = host and trim(host):gsub("%s+", "") or nil
+		result.server_port = port and tostring(port):match("%d+") or "443"
 		local params = {}
 		if query_part ~= "" then
 			for _, v in pairs(split(query_part, "&")) do
@@ -541,11 +552,11 @@ local function processData(szType, content)
 		result.vmess_id = uuid
 		result.tuic_passwd = (pass ~= "") and pass or (params.password or "")
 		result.password = result.tuic_passwd
-		result.congestion_control = params.congestion_control or "bbr"
-		result.udp_relay_mode = params.udp_relay_mode or "native"
+		result.congestion_control = params.congestion_control or params["congestion-controller"] or "bbr"
+		result.udp_relay_mode = params.udp_relay_mode or params["udp-relay-mode"] or "native"
 		result.tls_alpn = params.alpn or "h3"
 		result.tls_host = params.sni or host
-		result.insecure = (params.allow_insecure == "1" or params.insecure == "1") and "1" or "0"
+		result.insecure = (params.allow_insecure == "1" or params.insecure == "1" or params["skip-cert-verify"] == "1" or params["skip-cert-verify"] == "true") and "1" or "0"
 		result.disable_sni = (params.disable_sni == "1") and "1" or "0"
 	elseif szType == 'socks' or szType == 'socks5' then
 		local alias = ""
@@ -563,6 +574,12 @@ local function processData(szType, content)
 			main_part = main_part:sub(1, idx_q - 1)
 		end
 		main_part = main_part:gsub("/+$", "")
+		if not main_part:find(":") or not main_part:find("@") then
+			local decoded = base64Decode(main_part)
+			if decoded:find(":") then
+				main_part = decoded
+			end
+		end
 		local userinfo = ""
 		local host_port = main_part
 		if main_part:find("@") then
@@ -579,24 +596,24 @@ local function processData(szType, content)
 				end
 			end
 			if userinfo:find(":") then
-				local u = split(userinfo, ":")
-				username = u[1]
-				pass = u[2]
+				local idx_c = userinfo:find(":")
+				username = userinfo:sub(1, idx_c - 1)
+				pass = userinfo:sub(idx_c + 1, -1)
 			else
 				username = userinfo
 			end
 		end
 		local host, port
 		if host_port:find(":") then
-			local hp = split(host_port, ":")
-			host = hp[1]
-			port = hp[2]
+			local idx_p = host_port:match(".*():")
+			host = host_port:sub(1, idx_p - 1)
+			port = host_port:sub(idx_p + 1, -1):match("%d+")
 		else
 			host = host_port
 			port = "1080"
 		end
-		result.server = host
-		result.server_port = port
+		result.server = host and trim(host):gsub("%s+", "") or nil
+		result.server_port = port and tostring(port):match("%d+") or "1080"
 		if username ~= "" or pass ~= "" then
 			result.auth_enable = "1"
 			result.username = username
@@ -620,6 +637,12 @@ local function processData(szType, content)
 			main_part = main_part:sub(1, idx_q - 1)
 		end
 		main_part = main_part:gsub("/+$", "")
+		if not main_part:find(":") or not main_part:find("@") then
+			local decoded = base64Decode(main_part)
+			if decoded:find(":") then
+				main_part = decoded
+			end
+		end
 		local userinfo = ""
 		local host_port = main_part
 		if main_part:find("@") then
@@ -636,24 +659,24 @@ local function processData(szType, content)
 				end
 			end
 			if userinfo:find(":") then
-				local u = split(userinfo, ":")
-				username = u[1]
-				pass = u[2]
+				local idx_c = userinfo:find(":")
+				username = userinfo:sub(1, idx_c - 1)
+				pass = userinfo:sub(idx_c + 1, -1)
 			else
 				username = userinfo
 			end
 		end
 		local host, port
 		if host_port:find(":") then
-			local hp = split(host_port, ":")
-			host = hp[1]
-			port = hp[2]
+			local idx_p = host_port:match(".*():")
+			host = host_port:sub(1, idx_p - 1)
+			port = host_port:sub(idx_p + 1, -1):match("%d+")
 		else
 			host = host_port
 			port = (szType == "https") and "443" or "80"
 		end
-		result.server = host
-		result.server_port = port
+		result.server = host and trim(host):gsub("%s+", "") or nil
+		result.server_port = port and tostring(port):match("%d+") or ((szType == "https") and "443" or "80")
 		if szType == "https" then
 			result.tls = "1"
 			result.tls_host = host
@@ -736,26 +759,31 @@ local function parseClashYaml(text)
 		local trimmed = trim(line)
 		if trimmed:match("^proxies%s*:") then
 			in_proxies = true
-		elseif in_proxies and trimmed:match("^%-%s*name%s*:") then
-			if current then tinsert(proxies, current) end
+		elseif in_proxies and trimmed:match("^%-%s*") then
+			if current and current.server and current.port then tinsert(proxies, current) end
 			current = {}
-			local k, v = trimmed:match("^%-%s*([%w_%-]+)%s*:%s*(.*)$")
-			if k and v then
-				v = v:gsub('^["\']', ''):gsub('["\']$', '')
-				current[k] = v
+			local inline_content = trimmed:match("^%-%s*(.*)$")
+			if inline_content and inline_content:find(":") then
+				for k, v in inline_content:gmatch("([%w_%-]+)%s*:%s*([^,}]+)") do
+					v = trim(v):gsub('^["\']', ''):gsub('["\']$', '')
+					if v:match("^%[(.-)%]$") then v = v:match("^%[(.-)%]") end
+					current[trim(k)] = trim(v)
+				end
 			end
 		elseif in_proxies and current and trimmed:match("^[%w_%-]+%s*:") then
 			local k, v = trimmed:match("^([%w_%-]+)%s*:%s*(.*)$")
 			if k and v then
-				v = v:gsub('^["\']', ''):gsub('["\']$', '')
-				current[k] = v
+				v = trim(v):gsub('^["\']', ''):gsub('["\']$', '')
+				if v:match("^%[(.-)%]$") then v = v:match("^%[(.-)%]") end
+				current[trim(k)] = trim(v)
 			end
 		elseif in_proxies and not line:match("^%s") and trimmed ~= "" and not trimmed:match("^#") then
-			if current then tinsert(proxies, current); current = nil end
+			if current and current.server and current.port then tinsert(proxies, current) end
+			current = nil
 			in_proxies = false
 		end
 	end
-	if current then tinsert(proxies, current) end
+	if current and current.server and current.port then tinsert(proxies, current) end
 	return proxies
 end
 
