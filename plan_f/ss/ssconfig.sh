@@ -644,7 +644,7 @@ start_v2ray() {
 
 	# v2ray start
 	export GOGC=30
-	${TMP_BIN_PATH}/xray run -config=${CONFIG_FILE} >/dev/null 2>&1 &
+	${TMP_BIN_PATH}/xray run -config=${CONFIG_FILE} >/tmp/xray_error.log 2>&1 &
 	local V2PID
 	local i=15
 	until [ -n "$V2PID" ]; do
@@ -652,6 +652,9 @@ start_v2ray() {
 		V2PID=$(pidof xray)
 		if [ "$i" -lt 1 ]; then
 			echo_date "$(__get_type_abbr_name)进程启动失败！"
+			if [ -s /tmp/xray_error.log ]; then
+				echo_date "xray错误日志: $(cat /tmp/xray_error.log | tr '\n' ' ' | cut -c 1-200)"
+			fi
 			close_in_five
 		fi
 		usleep 250000

@@ -265,7 +265,7 @@ function conf2obj(obj, p) {
 			E(p + "v2_security").value = c.security || "auto";
 		}
 		if(c.v2ray_protocol == "vless"){
-			E(p + "v2_encryption").value = c.vless_encryption || "none";
+			E(p + "v2_encryption").value = (c.vless_encryption && c.vless_encryption != "auto") ? c.vless_encryption : "none";
 			var is_reality = (c.reality == "1" || c.reality == 1);
 			E(p + "v2_reality").checked = is_reality;
 			E(p + "v2_reality").value = is_reality ? "1" : "0";
@@ -578,7 +578,7 @@ function save() {
 				tmp_db.security = E("sstable_v2_security").value;
 			}
 			if(tmp_db.v2ray_protocol == "vless"){
-				tmp_db.vless_encryption = E("sstable_v2_encryption").value || "none";
+				tmp_db.vless_encryption = (E("sstable_v2_encryption").value && E("sstable_v2_encryption").value != "auto") ? E("sstable_v2_encryption").value : "none";
 				tmp_db.reality = E("sstable_v2_reality").checked ? '1' : '0';
 				tmp_db.tls_flow = E("sstable_v2_tls_flow").value;
 				if(E("sstable_v2_reality").checked == true){
@@ -1495,7 +1495,7 @@ function add_edit_node(flag, node_idx, add) {
 		}
 		if(tmp_db.v2ray_protocol == "vless"){
 			tmp_db.v2ray_protocol = "vless";
-			tmp_db.vless_encryption = $.trim($('#ss_node_table_v2_encryption').val()) || "none";
+			tmp_db.vless_encryption = ($.trim($('#ss_node_table_v2_encryption').val()) && $.trim($('#ss_node_table_v2_encryption').val()) != "auto") ? $.trim($('#ss_node_table_v2_encryption').val()) : "none";
 			tmp_db.reality = E("ss_node_table_v2_reality").checked ? '1' : '0';
 			if(tmp_db.reality == "1"){
 				tmp_db.reality_publickey = $.trim($('#ss_node_table_v2_reality_publickey').val());

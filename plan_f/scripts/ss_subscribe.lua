@@ -398,7 +398,7 @@ local function processData(szType, content)
 			authority = split(url.authority, "@")
 		end
 		result.vmess_id = url.user or authority[1]
-		result.vless_encryption = params.encryption or "none"
+		result.vless_encryption = (params.encryption and params.encryption ~= "auto") and params.encryption or "none"
 		result.transport = params.type or "tcp"
 		result.reality = (params.security == "reality") and "1" or "0"
 		if result.reality == "1" then
@@ -406,9 +406,11 @@ local function processData(szType, content)
 		else
 			result.tls = (params.security == "tls" or params.security == "xtls") and "1" or "0"
 		end
-		result.tls_host = params.sni or params.peer or nil
+		result.tls_host = params.sni or params.peer or (params.host and UrlDecode(params.host)) or nil
 		result.tls_flow = (params.security == "tls" or params.security == "xtls" or params.security == "reality") and params.flow or nil
-		result.fingerprint = params.fp or "disable"
+		result.fingerprint = params.fp or params["client-fingerprint"] or "disable"
+		result.tls_alpn = params.alpn and UrlDecode(params.alpn) or nil
+		result.insecure = (params.allowInsecure == "1" or params.insecure == "1" or params.allowInsecure == "true") and "1" or "0"
 		result.reality_publickey = params.pbk and UrlDecode(params.pbk) or nil
 		result.reality_shortid = params.sid
 		result.reality_spiderx = params.spx and UrlDecode(params.spx) or nil
@@ -855,10 +857,22 @@ local function clashProxyToUrl(p)
 		local uuid = p.uuid or ""
 		local is_reality = (p["reality-opts"] or p.reality or p.pbk or p["public-key"]) and true or false
 		local security = is_reality and "reality" or ((p.tls == "true" or p.tls == true) and "tls" or "none")
-		local sni = p.servername or p.sni or server
+		local sni = p.servername or p.sni or (p["ws-opts"] and p["ws-opts"].headers and p["ws-opts"].headers.Host) or server
 		local flow = p.flow or ""
-		local q = "security=" .. security .. "&sni=" .. sni
+		local net = p.network or "tcp"
+		local fp = p["client-fingerprint"] or p.fingerprint or ""
+		local alpn = ""
+		if type(p.alpn) == "table" then
+			alpn = table.concat(p.alpn, ",")
+		elseif type(p.alpn) == "string" then
+			alpn = p.alpn
+		end
+		local insecure = (p["skip-cert-verify"] == true or p["skip-cert-verify"] == "true") and "1" or "0"
+		local q = "security=" .. security .. "&sni=" .. sni .. "&type=" .. net .. "&encryption=none"
 		if flow ~= "" then q = q .. "&flow=" .. flow end
+		if fp ~= "" then q = q .. "&fp=" .. urlEncode(fp) end
+		if alpn ~= "" then q = q .. "&alpn=" .. urlEncode(alpn) end
+		if insecure == "1" then q = q .. "&allowInsecure=1" end
 		if is_reality then
 			local ropts = (type(p["reality-opts"]) == "table") and p["reality-opts"] or {}
 			local pbk = p.pbk or p["public-key"] or ropts["public-key"] or ropts.pbk or ""

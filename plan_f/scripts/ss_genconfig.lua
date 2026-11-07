@@ -33,10 +33,30 @@ local server = jsonParse(b64decode(tserver2))
 local outbound_settings = nil
 --log(jsonStringify(server));
 
+local function parse_alpn(alpn_val)
+	if type(alpn_val) == "table" then
+		return (#alpn_val > 0) and alpn_val or nil
+	elseif type(alpn_val) == "string" and alpn_val ~= "" then
+		local list = {}
+		for part in string.gmatch(alpn_val, "([^,]+)") do
+			local s = part:match("^%s*(.-)%s*$")
+			if s ~= "" then
+				table.insert(list, s)
+			end
+		end
+		return (#list > 0) and list or nil
+	end
+	return nil
+end
+
 function vmess_vless()
 	local flow_val = nil
 	if (server.tls == '1' or server.reality == '1') and server.tls_flow and server.tls_flow ~= "" and server.tls_flow ~= "none" then
 		flow_val = server.tls_flow
+	end
+	local vless_enc = "none"
+	if server.vless_encryption and server.vless_encryption ~= "" and server.vless_encryption ~= "auto" then
+		vless_enc = server.vless_encryption
 	end
 	outbound_settings = {
 		vnext = {
@@ -48,7 +68,7 @@ function vmess_vless()
 						id = server.vmess_id,
 						alterId = (server.v2ray_protocol == "vmess" or not server.v2ray_protocol) and tonumber(server.alter_id) or nil,
 						security = (server.v2ray_protocol == "vmess" or not server.v2ray_protocol) and (server.security or "auto") or nil,
-						encryption = (server.v2ray_protocol == "vless") and (server.vless_encryption and server.vless_encryption ~= "" and server.vless_encryption or "none") or nil,
+						encryption = (server.v2ray_protocol == "vless") and vless_enc or nil,
 						flow = flow_val
 					}
 				}
@@ -327,15 +347,8 @@ local Xray = {
 		tag = "dns-in"
 	} or nil,
 	},
-	-- 开启 socks 代理兼容
-	inboundDetour = (proto:find("tcp") and socks_port ~= "0") and {
-		{
-			-- socks
-			protocol = "socks",
-			port = tonumber(socks_port),
-			settings = {auth = "noauth", udp = true}
-		}
-	} or nil,
+	-- 开启 socks 代理兼容 (inbounds 中已有 socks，此处置 nil 避免端口冲突)
+	inboundDetour = nil,
 	-- 传出连接
 	outbounds = {
 	{
@@ -348,8 +361,8 @@ local Xray = {
 			security = (server.reality == '1') and "reality" or (server.tls == '1') and "tls" or nil,
 			tlsSettings = (server.reality ~= '1' and server.tls == '1') and {
 				-- tls
-				alpn = (type(server.tls_alpn) == "table") and server.tls_alpn or (server.tls_alpn and server.tls_alpn ~= "" and {server.tls_alpn}) or nil,
-				fingerprint = (server.fingerprint == "disable") and "" or server.fingerprint,
+				alpn = parse_alpn(server.tls_alpn),
+				fingerprint = (server.fingerprint and server.fingerprint ~= "" and server.fingerprint ~= "disable") and server.fingerprint or nil,
 				allowInsecure = (server.insecure == "1"),
 				serverName = (server.tls_host and server.tls_host ~= "") and server.tls_host or server.server,
 				certificates = (server.certificate and server.certpath and server.certpath ~= "") and {
@@ -425,11 +438,13 @@ local Xray = {
 				tcpcongestion = server.custom_tcpcongestion or nil -- 连接服务器节点的 TCP 拥塞控制算法
 			}
 		},
-		mux = {
-			enabled = (server.mux == "1") and true or false, -- Mux
-			concurrency = tonumber(server.concurrency), -- TCP 最大并发连接数
+		mux = ((not server.tls_flow or not server.tls_flow:find("xtls")) and (server.mux == "1")) and {
+			enabled = true,
+			concurrency = tonumber(server.concurrency) or 4, -- TCP 最大并发连接数
 			xudpConcurrency = tonumber(server.xudpConcurrency), -- UDP 最大并发连接数
 			xudpProxyUDP443 = server.xudpProxyUDP443 -- 对被代理的 UDP/443 流量处理方式
+		} or {
+			enabled = false
 		}
 	},
 	{
