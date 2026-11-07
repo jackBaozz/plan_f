@@ -1035,3 +1035,18 @@ body .layui-layer-lan .layui-layer-btn2 {border-color:#FF6600; background-color:
 #scapp[skin=SWRT] #ss_help_id, #scapp[skin=SWRT] #ss_status_id {
 	margin-left:400px !important;
 }
+
+#ss_node_list_table_main::-webkit-scrollbar {
+	width: 8px !important;
+}
+#ss_node_list_table_main::-webkit-scrollbar-track {
+	background: #1e262a !important;
+	border-radius: 4px;
+}
+#ss_node_list_table_main::-webkit-scrollbar-thumb {
+	background: #6b8fa3 !important;
+	border-radius: 4px;
+}
+#ss_node_list_table_main::-webkit-scrollbar-thumb:hover {
+	background: #2ed9c3 !important;
+}

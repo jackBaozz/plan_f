@@ -18,6 +18,22 @@
 <link rel="stylesheet" type="text/css" href="/res/layer/theme/default/layer.css">
 <link rel="stylesheet" type="text/css" href="/res/softcenter.css">
 <link rel="stylesheet" type="text/css" href="/res/helloworld.css">
+<style type="text/css">
+#ss_node_list_table_main::-webkit-scrollbar {
+	width: 8px !important;
+}
+#ss_node_list_table_main::-webkit-scrollbar-track {
+	background: #1e262a !important;
+	border-radius: 4px;
+}
+#ss_node_list_table_main::-webkit-scrollbar-thumb {
+	background: #6b8fa3 !important;
+	border-radius: 4px;
+}
+#ss_node_list_table_main::-webkit-scrollbar-thumb:hover {
+	background: #2ed9c3 !important;
+}
+</style>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
 <script language="JavaScript" type="text/javascript" src="/res/layer/layer.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/httpApi.js"></script>
@@ -1848,15 +1864,17 @@ function refresh_html() {
 	}
 	// make dynamic element
 	var html = '';
+	var ping_icon_sym = typeof sort_ping_asc !== 'undefined' ? (sort_ping_asc ? "▲" : "▼") : "▲▼";
+	var type_icon_sym = typeof sort_type_asc !== 'undefined' ? (sort_type_asc ? "▲" : "▼") : "▲▼";
 	html += '<div class="nodeTable" style="height:' + trsH + 'px; margin: -1px 0px 0px 0px; width: 750px;">'
-	html += '<table width="750px" border="0" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin:-1px 0px 0px 0px;">'
+	html += '<table width="738px" border="0" align="left" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin:-1px 0px 0px 0px; width: 738px;">'
 	html += '<tr height="' + trsH + 'px">'
 	html += '<th style="width:' + width[1] + ';">序号</th>'
 	html += '<th style="width:' + width[2] + ';cursor:pointer" onclick="hide_name();" title="点我隐藏节点名称信息!" >节点名称</th>'
 	html += '<th style="width:' + width[3] + ';cursor:pointer" onclick="hide_server();" title="点我隐藏服务器信息!" >服务器地址</th>'
-	html += '<th style="width:' + width[4] + ';">类型</th>'
+	html += '<th style="width:' + width[4] + ';cursor:pointer;user-select:none;" onclick="sort_by_type();" title="点击按节点类型排序">类型 <span id="sort_type_icon" style="color:#2ed9c3;font-size:10px;">' + type_icon_sym + '</span></th>'
 	if(node_nu && db_ss["ssconf_basic_ping_node"] != "off" && E("ssconf_basic_ping_node") != ""){
-		html += '<th style="width:' + width[5] + ';" id="ping_th">ping/丢包</th>'
+		html += '<th style="width:' + width[5] + ';cursor:pointer;user-select:none;" id="ping_th" onclick="sort_by_ping();" title="点击按网速/延迟排序">ping/丢包 <span id="sort_ping_icon" style="color:#2ed9c3;font-size:10px;">' + ping_icon_sym + '</span></th>'
 	}
 	html += '<th style="width:' + width[6] + ';">编辑</th>'
 	html += '<th style="width:' + width[7] + ';">使用</th>'
@@ -1864,10 +1882,9 @@ function refresh_html() {
 	html += '</table>'
 	html += '</div>'
 	
-	//html += '<div class="nodeTable" style="top: ' + nodeT + 'px; width: 750px; height: ' + nodeH + 'px; overflow: hidden; position: absolute;">'
 	html += '<div class="nodeTable" style="width: 750px; height: ' + nodeH + 'px; overflow: hidden;">'
-	html += '<div id="ss_node_list_table_main" style="width: 750px; height: ' + nodeH + 'px; overflow: hidden scroll; padding-right: 35px;">'
-	html += '<table id="ss_node_list_table" style="margin:-1px 0px 0px 0px;" width="750px" border="0" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="list_table">'
+	html += '<div id="ss_node_list_table_main" style="width: 750px; height: ' + nodeH + 'px; overflow-x: hidden; overflow-y: scroll; box-sizing: border-box;">'
+	html += '<table id="ss_node_list_table" style="margin:-1px 0px 0px 0px; width: 738px;" border="0" align="left" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="list_table">'
 	
 	for (var i = 0; i < ss_nodes.length; i++) {
 		var c = confs[ss_nodes[i]];
@@ -1971,6 +1988,109 @@ function refresh_html() {
 		}
 	}
 }
+
+var sort_ping_asc = false;
+var sort_type_asc = false;
+
+function get_node_ping_val(node_id) {
+	if (typeof ps !== "undefined" && ps && ps.length) {
+		for (var i = 0; i < ps.length; i++) {
+			if (parseInt(ps[i][0]) === parseInt(node_id)) {
+				var p = parseFloat(ps[i][1]);
+				if (!isNaN(p) && p > 0) return p;
+				return 999999;
+			}
+		}
+	}
+	var txt = $("#ss_node_ping_" + node_id).text() || "";
+	var m = txt.match(/([\d\.]+)ms/);
+	if (m && m[1]) {
+		var v = parseFloat(m[1]);
+		if (!isNaN(v) && v > 0) return v;
+	}
+	return 999999;
+}
+
+function sort_by_ping() {
+	var table = $("#ss_node_list_table");
+	var trs = table.find("tr").toArray();
+	if (trs.length <= 1) return;
+
+	var has_valid_ping = false;
+	for (var i = 0; i < trs.length; i++) {
+		var rowid = $(trs[i]).attr("id").split("_")[1];
+		if (get_node_ping_val(rowid) < 999999) {
+			has_valid_ping = true;
+			break;
+		}
+	}
+	if (!has_valid_ping) {
+		alert("当前暂无测速结果，正在为您启动测速，测速完成后请再次点击排序！");
+		ping_test();
+		return;
+	}
+
+	sort_ping_asc = !sort_ping_asc;
+	$("#sort_ping_icon").html(sort_ping_asc ? "▲" : "▼");
+	$("#sort_type_icon").html("▲▼");
+
+	trs.sort(function(a, b) {
+		var idA = $(a).attr("id").split("_")[1];
+		var idB = $(b).attr("id").split("_")[1];
+		var valA = get_node_ping_val(idA);
+		var valB = get_node_ping_val(idB);
+		if (valA === valB) {
+			return parseInt(idA) - parseInt(idB);
+		}
+		return sort_ping_asc ? (valA - valB) : (valB - valA);
+	});
+
+	table.empty();
+	for (var i = 0; i < trs.length; i++) {
+		table.append(trs[i]);
+	}
+	save_new_order();
+}
+
+function get_node_type_val(node_id) {
+	if (typeof confs !== "undefined" && confs[node_id] && confs[node_id]["json"]) {
+		try {
+			var j = JSON.parse(confs[node_id]["json"]);
+			var t = (j.v2ray_protocol || j.type || "").toLowerCase();
+			if (t) return t;
+		} catch(e) {}
+	}
+	var txt = $("#node_" + node_id + " td:nth-child(4)").text() || "";
+	return $.trim(txt).toLowerCase();
+}
+
+function sort_by_type() {
+	var table = $("#ss_node_list_table");
+	var trs = table.find("tr").toArray();
+	if (trs.length <= 1) return;
+
+	sort_type_asc = !sort_type_asc;
+	$("#sort_type_icon").html(sort_type_asc ? "▲" : "▼");
+	$("#sort_ping_icon").html("▲▼");
+
+	trs.sort(function(a, b) {
+		var idA = $(a).attr("id").split("_")[1];
+		var idB = $(b).attr("id").split("_")[1];
+		var typeA = get_node_type_val(idA);
+		var typeB = get_node_type_val(idB);
+		if (typeA === typeB) {
+			return parseInt(idA) - parseInt(idB);
+		}
+		return sort_type_asc ? typeA.localeCompare(typeB) : typeB.localeCompare(typeA);
+	});
+
+	table.empty();
+	for (var i = 0; i < trs.length; i++) {
+		table.append(trs[i]);
+	}
+	save_new_order();
+}
+
 function hide_name(){
 	//var sw = $(".node_name").width();
 	var sw = $(".node_name")[0].clientWidth - 4;
@@ -2319,8 +2439,10 @@ function write_ping(r){
 					}
 				}
 			}else{
+				var ping_icon_sym = typeof sort_ping_asc !== 'undefined' ? (sort_ping_asc ? "▲" : "▼") : "▲▼";
+				var ping_icon_html = ' <span id="sort_ping_icon" style="color:#2ed9c3;font-size:10px;">' + ping_icon_sym + '</span>';
 				if(E("ssconf_basic_ping_method").value == 1){
-					$('#ping_th').html("ping");
+					$('#ping_th').html("ping" + ping_icon_html);
 					if (ping <= 50){
 						test_result = '<font color="#1bbf35">' + ping.toPrecision(3) +'ms</font>';
 					}else if (ping > 50 && ping <= 100) {
@@ -2329,7 +2451,7 @@ function write_ping(r){
 						test_result = '<font color="#f36c21">' + ping.toPrecision(3) +'ms</font>';
 					}
 				}else{
-					$('#ping_th').html("ping/丢包");
+					$('#ping_th').html("ping/丢包" + ping_icon_html);
 					if (ping <= 50){
 						test_result = '<font color="#1bbf35">' + ping.toPrecision(3) +'ms/' + loss + '</font>';
 					}else if (ping > 50 && ping <= 100) {
@@ -2398,6 +2520,7 @@ function version_show() {
 	});
 }
 function message_show() {
+	return;
 	if (db_ss["ssconf_close_mesg"] == "0") return
 	$.ajax({
 		url: 'https://gist.githubusercontent.com/zusterben/9603cd181504b88cb82fd2f925a20550/raw/helloworld_msg.json?_=' + new Date().getTime(),
@@ -3539,7 +3662,7 @@ function set_skin(){
 											<img id="return_btn" onclick="reload_Soft_Center();" align="right" style="cursor:pointer;position:absolute;margin-left:-30px;margin-top:-25px;" title="返回软件中心" src="/images/backprev.png" onMouseOver="this.src='/images/backprevclick.png'" onMouseOut="this.src='/images/backprev.png'"></img>
 										</div>
 										<div style="margin:10px 0 10px 5px;" class="splitLine"></div>
-										<div class="SimpleNote" id="head_illustrate">
+										<div class="SimpleNote" id="head_illustrate" style="display: none;">
 												<ul id="fixed_msg" style="padding:0;margin:0;line-height:1.8;">
 													<li id="msg_0" style="list-style: none;height:23px">
 														本插件是支持<a href="https://github.com/shadowsocks/shadowsocks-libev" target="_blank"><em><u>SS</u></em></a>
